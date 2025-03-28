@@ -130,7 +130,9 @@ cython_debug/
 
 # Local database files (if named differently than standard Django/Flask)
 # Example:
-# database/app.db
+database/app.db
+database/app.db-shm
+database/app.db-wal
 # database/app.db-journal # Add specific DB files if not covered by .env path
 
 # Logs directory (defined in logger.py)
