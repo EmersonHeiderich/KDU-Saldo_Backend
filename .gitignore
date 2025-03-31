@@ -133,6 +133,7 @@ cython_debug/
 database/app.db
 database/app.db-shm
 database/app.db-wal
+*.db
 # database/app.db-journal # Add specific DB files if not covered by .env path
 
 # Logs directory (defined in logger.py)
