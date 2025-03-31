@@ -11,7 +11,7 @@ from src.erp_integration.erp_person_service import ErpPersonService
 
 # Domain Models
 from src.domain.accounts_receivable import (
-    DocumentRequestModel, DocumentFilterModel, DocumentModel, DocumentResponseModel,
+    DocumentChangeModel, DocumentRequestModel, DocumentFilterModel, DocumentModel, DocumentResponseModel,
     BankSlipRequestModel, AccountsReceivableTomasResponseModel, FormattedReceivableListItem,
     CalculatedValuesModel, InvoiceDataModel
 )
