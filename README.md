@@ -1,7 +1,7 @@
 
 # Saldo API
 
-API Flask para consulta de saldos de produtos e tecidos, custos e dados de clientes, integrando-se a um ERP TOTVS.
+API Flask para consulta de saldos de produtos e tecidos, custos, dados de clientes e contas a receber, integrando-se a um ERP TOTVS.
 
 ## Funcionalidades Principais
 
@@ -9,6 +9,7 @@ API Flask para consulta de saldos de produtos e tecidos, custos e dados de clien
 *   **Consulta de Saldo de Tecidos:** Retorna uma lista de tecidos (matérias-primas) com saldo, custo e detalhes (largura, gramatura, encolhimento).
 *   **Gerenciamento de Observações:** Permite adicionar, visualizar e resolver observações associadas a produtos.
 *   **Painel do Cliente:** Busca dados cadastrais (PF/PJ) e estatísticas financeiras de clientes.
+*   **Contas a Receber:** Permite buscar documentos de contas a receber com filtros avançados e gerar boletos em PDF.
 *   **Gerenciamento de Usuários:** CRUD de usuários e suas permissões (acesso restrito a administradores).
 *   **Autenticação e Autorização:** Sistema de login baseado em token JWT com controle de acesso por permissões.
 
@@ -18,20 +19,32 @@ O projeto segue uma arquitetura em camadas para melhor organização e manutenib
 
 ```
 saldo-api/
-├── .env                 # Variáveis de ambiente
+├── .env # Variáveis de ambiente
 ├── requirements.txt
-├── run.py               # Ponto de entrada para execução
-├── README.md            # Este arquivo
+├── run.py # Ponto de entrada para execução
+├── README.md # Este arquivo
 │
 └── src/
-    ├── app.py               # Fábrica da aplicação Flask (create_app)
-    ├── config/              # Configurações (settings.py)
-    ├── domain/              # Modelos de dados (dataclasses)
-    ├── database/            # Camada de acesso ao banco de dados (SQLite)
-    ├── services/            # Camada de lógica de negócio
-    ├── erp_integration/     # Camada de integração com o ERP TOTVS
-    ├── api/                 # Camada da API (Blueprints, rotas, decorators, errors)
-    └── utils/               # Utilitários (logger, builders)
+├── app.py # Fábrica da aplicação Flask (create_app)
+├── config/ # Configurações (settings.py)
+├── domain/ # Modelos de dados (dataclasses)
+│ ├── accounts_receivable.py #
+│ └── ... (outros modelos)
+├── database/ # Camada de acesso ao banco de dados (SQLite)
+├── services/ # Camada de lógica de negócio
+│ ├── accounts_receivable_service.py #
+│ └── ... (outros serviços)
+├── erp_integration/ # Camada de integração com o ERP TOTVS
+│ ├── erp_accounts_receivable_service.py #
+│ └── ... (outros serviços ERP)
+├── api/ # Camada da API (Blueprints, rotas, decorators, errors)
+│ ├── routes/
+│ │ ├── accounts_receivable.py #
+│ │ └── ... (outras rotas)
+│ └── ... (decorators, errors, etc.)
+└── utils/ # Utilitários (logger, builders)
+├── pdf_utils.py #
+└── ... (outros utils)
 ```
 
 Consulte os `README.md` dentro de cada diretório para mais detalhes sobre sua responsabilidade.
@@ -100,4 +113,5 @@ Consulte os `README.md` dentro de cada diretório para mais detalhes sobre sua r
 *   Refinar o sistema de migração do banco de dados (considerar Alembic/Flask-Migrate).
 *   Melhorar a configuração de CORS para produção.
 *   Implementar mais funcionalidades de consulta ao ERP.
-*   Adicionar endpoints para o módulo fiscal.
+*   Expandir funcionalidades do Módulo fiscal (ex: Detalhes da nota).
+*   Expandir funcionalidades do Contas a Receber (ex: Link PIX).

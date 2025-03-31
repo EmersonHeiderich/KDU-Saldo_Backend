@@ -5,14 +5,16 @@ Este diretório contém a camada da API da aplicação, responsável por expor o
 ## Arquivos e Subdiretórios
 
 *   **`__init__.py`**: Inicializa o pacote `api` e contém a função `register_blueprints` para registrar todos os blueprints da API na aplicação Flask principal.
-*   **`decorators.py`**: Define decoradores customizados usados nos endpoints para controle de acesso (autenticação e autorização), como `@login_required`, `@admin_required`, `@products_access_required`, etc.
+*   **`decorators.py`**: Define decoradores customizados usados nos endpoints para controle de acesso (autenticação e autorização), como `@login_required`, `@admin_required`, `@accounts_receivable_access_required`, etc.
 *   **`errors.py`**: Define exceções customizadas (`ApiError`, `ValidationError`, `NotFoundError`, etc.) que podem ser lançadas pelas camadas de serviço ou API, e também registra os manipuladores de erro (`@app.errorhandler`) no Flask para transformar essas exceções (e exceções HTTP padrão) em respostas JSON padronizadas.
 *   **`routes/`**: Subdiretório contendo os blueprints Flask, onde cada arquivo corresponde a um grupo lógico de endpoints.
+    *   `accounts_receivable.py`: Endpoints de Contas a Receber (`/search`, `/boleto`).
     *   `auth.py`: Endpoints de autenticação (`/login`, `/logout`, `/verify`).
     *   `customer_panel.py`: Endpoints do painel do cliente (`/data`, `/statistics`).
     *   `fabrics.py`: Endpoint para consulta de tecidos (`/balances`).
+    *   `fiscal.py`: Endpoints para o módulo Fiscal (`/invoices/search`, `/danfe/{key}`).
     *   `observations.py`: Endpoints para gerenciamento de observações (`/product/...`, `/<id>/resolve`, `/pending_references`).
-    *   `products.py`: Endpoints para produtos acabados (`/balance_matrix`, `/variant_details`).
+    *   `products.py`: Endpoints para produtos acabados (`/balance_matrix`).
     *   `users.py`: Endpoints para gerenciamento de usuários (CRUD).
 *   **`README.md`**: Este arquivo.
 
@@ -23,7 +25,7 @@ Este diretório contém a camada da API da aplicação, responsável por expor o
 *   Utilizar os decoradores de `decorators.py` para garantir a autenticação e autorização necessárias para cada endpoint.
 *   Chamar os métodos apropriados na camada de serviço (`src/services`) para executar a lógica de negócio.
 *   Receber os resultados (ou exceções) da camada de serviço.
-*   Formatar os resultados em respostas JSON padronizadas.
+*   Formatar os resultados em respostas JSON padronizadas ou respostas binárias (ex: PDF do boleto).
 *   Utilizar os manipuladores de erro de `errors.py` para garantir que todos os erros (esperados ou inesperados) resultem em respostas JSON consistentes com o status HTTP correto.
 *   Interagir com o contexto da aplicação Flask (`current_app`, `request`, `session`).
 

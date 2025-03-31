@@ -8,7 +8,8 @@ from .routes.products import products_bp
 from .routes.fabrics import fabrics_bp
 from .routes.observations import observations_bp
 from .routes.customer_panel import customer_panel_bp
-from .routes.fiscal import fiscal_bp # <<<--- ADDED
+from .routes.fiscal import fiscal_bp
+from .routes.accounts_receivable import accounts_receivable_bp # <<<--- ADDED
 from src.utils.logger import logger
 
 # List of blueprints to register
@@ -20,7 +21,8 @@ BLUEPRINTS = [
     (fabrics_bp, '/api/fabrics'),
     (observations_bp, '/api/observations'),
     (customer_panel_bp, '/api/customer_panel'),
-    (fiscal_bp, '/api/fiscal'), # <<<--- ADDED
+    (fiscal_bp, '/api/fiscal'),
+    (accounts_receivable_bp, '/api/accounts-receivable'), # <<<--- ADDED
 ]
 
 def register_blueprints(app: Flask):

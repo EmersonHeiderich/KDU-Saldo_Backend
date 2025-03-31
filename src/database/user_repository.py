@@ -32,7 +32,8 @@ class UserRepository(BaseRepository):
             'can_access_products': row.pop('can_access_products', 0),
             'can_access_fabrics': row.pop('can_access_fabrics', 0),
             'can_access_customer_panel': row.pop('can_access_customer_panel', 0),
-            'can_access_fiscal': row.pop('can_access_fiscal', 0) # <<<--- ADDED
+            'can_access_fiscal': row.pop('can_access_fiscal', 0),
+            'can_access_accounts_receivable': row.pop('can_access_accounts_receivable', 0) # <<<--- ADDED
         }
         # Remaining fields are for the User object
         user_data = row
@@ -53,7 +54,8 @@ class UserRepository(BaseRepository):
                   can_access_products=False,
                   can_access_fabrics=False,
                   can_access_customer_panel=False,
-                  can_access_fiscal=False
+                  can_access_fiscal=False,
+                  can_access_accounts_receivable=False
              )
         elif user and user.permissions and user.permissions.user_id is None:
              # Set user_id if User.from_dict didn't get it from the base row
@@ -75,7 +77,7 @@ class UserRepository(BaseRepository):
         # COLLATE NOCASE in CREATE TABLE handles case-insensitivity at DB level
         query = """
             SELECT u.*, p.id as permission_id, p.is_admin, p.can_access_products,
-                   p.can_access_fabrics, p.can_access_customer_panel, p.can_access_fiscal -- <<<--- ADDED
+                   p.can_access_fabrics, p.can_access_customer_panel, p.can_access_fiscal, p.can_access_accounts_receivable -- <<<--- ADDED
             FROM users u
             LEFT JOIN user_permissions p ON u.id = p.user_id
             WHERE u.username = ? AND u.is_active = 1
@@ -107,7 +109,7 @@ class UserRepository(BaseRepository):
         """
         query = """
             SELECT u.*, p.id as permission_id, p.is_admin, p.can_access_products,
-                   p.can_access_fabrics, p.can_access_customer_panel, p.can_access_fiscal -- <<<--- ADDED
+                   p.can_access_fabrics, p.can_access_customer_panel, p.can_access_fiscal, p.can_access_accounts_receivable  -- <<<--- ADDED
             FROM users u
             LEFT JOIN user_permissions p ON u.id = p.user_id
             WHERE u.id = ?
@@ -136,7 +138,7 @@ class UserRepository(BaseRepository):
         """
         query = """
             SELECT u.*, p.id as permission_id, p.is_admin, p.can_access_products,
-                   p.can_access_fabrics, p.can_access_customer_panel, p.can_access_fiscal -- <<<--- ADDED
+                   p.can_access_fabrics, p.can_access_customer_panel, p.can_access_fiscal, p.can_access_accounts_receivable -- <<<--- ADDED
             FROM users u
             LEFT JOIN user_permissions p ON u.id = p.user_id
             ORDER BY u.username
@@ -186,8 +188,8 @@ class UserRepository(BaseRepository):
 
         perm_query = """
             INSERT INTO user_permissions
-            (user_id, is_admin, can_access_products, can_access_fabrics, can_access_customer_panel, can_access_fiscal) -- <<<--- ADDED
-            VALUES (?, ?, ?, ?, ?, ?) -- <<<--- ADDED Placeholder
+            (user_id, is_admin, can_access_products, can_access_fabrics, can_access_customer_panel, can_access_fiscal, can_access_accounts_receivable) -- <<<--- ADDED
+            VALUES (?, ?, ?, ?, ?, ?, ?) -- <<<--- ADDED Placeholder
         """
 
         conn = None
@@ -213,7 +215,8 @@ class UserRepository(BaseRepository):
                 user.permissions.can_access_products,
                 user.permissions.can_access_fabrics,
                 user.permissions.can_access_customer_panel,
-                user.permissions.can_access_fiscal # <<<--- ADDED
+                user.permissions.can_access_fiscal,
+                user.permissions.can_access_customer_panel
             )
             cursor.execute(perm_query, perm_params)
             permission_id = cursor.lastrowid
@@ -285,8 +288,8 @@ class UserRepository(BaseRepository):
         # This simplifies logic compared to checking existence first.
         perm_query = """
             INSERT OR REPLACE INTO user_permissions
-            (user_id, is_admin, can_access_products, can_access_fabrics, can_access_customer_panel, can_access_fiscal) -- <<<--- ADDED
-            VALUES (?, ?, ?, ?, ?, ?) -- <<<--- ADDED Placeholder
+            (user_id, is_admin, can_access_products, can_access_fabrics, can_access_customer_panel, can_access_fiscal, can_access_accounts_receivable) -- <<<--- ADDED
+            VALUES (?, ?, ?, ?, ?, ?, ?) -- <<<--- ADDED Placeholder
         """
         perm_params = (
             user.id, # Use user.id as the user_id
@@ -294,7 +297,8 @@ class UserRepository(BaseRepository):
             user.permissions.can_access_products,
             user.permissions.can_access_fabrics,
             user.permissions.can_access_customer_panel,
-            user.permissions.can_access_fiscal # <<<--- ADDED
+            user.permissions.can_access_fiscal,
+            user.permissions.can_access_accounts_receivable
         )
 
         conn = None

@@ -15,9 +15,11 @@ saldo-api/
     │
     ├── domain/              # Data models (formerly models)
     │   ├── __init__.py
+    │   ├── accounts_receivable.py # <<< ADDED
     │   ├── balance.py       # Balance, ProductItem, ProductResponse
     │   ├── cost.py          # Cost, ProductCost, CostResponse
     │   ├── fabric_details.py# TecidoDetalhes (renamed from product_model.py)
+    │   ├── fiscal.py        # <<< (Este foi adicionado anteriormente)
     │   ├── observation.py   # Observation data model (if needed, or use dict)
     │   ├── person.py        # Address, Phone, Email, IndividualDataModel, etc.
     │   ├── user.py          # User, UserPermissions
@@ -27,26 +29,30 @@ saldo-api/
     │   ├── __init__.py      # Initialize pool, repositories, schema
     │   ├── base_repository.py
     │   ├── connection_pool.py
-    │   ├── observation_repository.py # NEW: Specific repo for observations
-    │   ├── product_repository.py # REPURPOSED/REMOVED?: If only observations, maybe merge into observation_repo
+    │   ├── observation_repository.py # Specific repo for observations
+    │   ├── product_repository.py # Placeholder
     │   ├── schema_manager.py # Handles table creation/migration
     │   ├── user_repository.py
     │   └── README.md        # Explanation of database layer
     │
     ├── services/            # Business logic layer
     │   ├── __init__.py
+    │   ├── accounts_receivable_service.py # <<< ADDED
     │   ├── auth_service.py    # User authentication/authorization logic
     │   ├── customer_service.py# Logic related to customer panel (using ERP data)
     │   ├── fabric_service.py  # Logic for fabric list building/filtering
-    │   ├── observation_service.py # NEW: Business logic for observations (using ObservationRepository)
+    │   ├── fiscal_service.py  # <<< (Este foi adicionado anteriormente)
+    │   ├── observation_service.py # Business logic for observations
     │   ├── product_service.py # Logic for product matrix building
     │   └── README.md        # Explanation of business services
     │
     ├── erp_integration/     # Layer for interacting with the TOTVS ERP API
     │   ├── __init__.py
+    │   ├── accounts_receivable_service.py # <<< ADDED
     │   ├── erp_auth_service.py # Handles ERP API authentication (Bearer token)
     │   ├── erp_balance_service.py # Fetches balance data from ERP
     │   ├── erp_cost_service.py    # Fetches cost data from ERP
+    │   ├── erp_fiscal_service.py # <<< (Este foi adicionado anteriormente)
     │   ├── erp_person_service.py  # Fetches person data from ERP
     │   ├── erp_product_service.py # Fetches product details (like fabric details) from ERP
     │   └── README.md        # Explanation of ERP integration layer
@@ -55,13 +61,15 @@ saldo-api/
     │   ├── __init__.py      # Register all blueprints
     │   ├── routes/
     │   │   ├── __init__.py
+    │   │   ├── accounts_receivable.py # <<< ADDED
     │   │   ├── auth.py          # /api/auth/* endpoints
     │   │   ├── customer_panel.py# /api/customer_panel/* endpoints
-    │   │   ├── fabrics.py       # /api/fabrics/* endpoints (formerly /estoque/v1/saldo/tecido)
-    │   │   ├── observations.py  # /api/observations/*, /api/products/{ref}/observations/*
-    │   │   ├── products.py      # /api/products/* endpoints (formerly /estoque/v1/saldo/produto, /estoque/v1/detalhes)
+    │   │   ├── fabrics.py       # /api/fabrics/* endpoints
+    │   │   ├── fiscal.py        # <<< (Este foi adicionado anteriormente)
+    │   │   ├── observations.py  # /api/observations/*
+    │   │   ├── products.py      # /api/products/* endpoints
     │   │   └── users.py         # /api/users/* endpoints
-    │   ├── decorators.py    # Authorization decorators (login_required, admin_required, etc.)
+    │   ├── decorators.py    # Authorization decorators
     │   ├── errors.py        # Custom error handlers and exceptions
     │   └── README.md        # Explanation of the API layer
     │
@@ -70,4 +78,6 @@ saldo-api/
         ├── fabric_list_builder.py # Helper to build fabric list structure
         ├── logger.py          # Logging setup
         ├── matrix_builder.py  # Helper to build product matrix structure
+        ├── pdf_utils.py       # <<< ADDED
+        ├── system_monitor.py  # <<< (Este foi adicionado anteriormente)
         └── README.md        # Explanation of utility functions

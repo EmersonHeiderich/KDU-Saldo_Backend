@@ -18,7 +18,8 @@ class UserPermissions:
     can_access_products: bool = False
     can_access_fabrics: bool = False
     can_access_customer_panel: bool = False
-    can_access_fiscal: bool = False # <<<--- ADDED
+    can_access_fiscal: bool = False
+    can_access_accounts_receivable: bool = False # <<<--- ADDED
 
     def to_dict(self) -> Dict[str, Any]:
         """Converts the UserPermissions object to a dictionary."""
@@ -41,7 +42,9 @@ class UserPermissions:
             can_access_products=bool(data.get('can_access_products', False)),
             can_access_fabrics=bool(data.get('can_access_fabrics', False)),
             can_access_customer_panel=bool(data.get('can_access_customer_panel', False)),
-            can_access_fiscal=bool(data.get('can_access_fiscal', False)) # <<<--- ADDED
+            can_access_fiscal=bool(data.get('can_access_fiscal', False)),
+            can_access_accounts_receivable=bool(data.get('can_access_accounts_receivable', False)) # <<<--- ADDED
+
         )
 
 @dataclass

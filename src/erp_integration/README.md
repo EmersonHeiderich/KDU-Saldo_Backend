@@ -4,6 +4,7 @@ Este diretório contém a camada responsável por toda a comunicação com a API
 
 ## Arquivos
 
+*   **`erp_accounts_receivable_service.py`**: Responsável por buscar dados de documentos de contas a receber e solicitar geração de boletos via API do ERP.
 *   **`erp_auth_service.py`**: Gerencia a autenticação com a API do ERP, obtendo e renovando os tokens de acesso (Bearer tokens) necessários para as demais chamadas. Implementado como um Singleton thread-safe.
 *   **`erp_balance_service.py`**: Responsável por buscar dados de saldo de produtos (acabados ou matérias-primas) do endpoint `/product/v2/balances/search` do ERP.
 *   **`erp_cost_service.py`**: Responsável por buscar dados de custo de produtos do endpoint `/product/v2/costs/search` do ERP.
@@ -18,8 +19,8 @@ Este diretório contém a camada responsável por toda a comunicação com a API
 *   Realizar chamadas HTTP (GET/POST) para os endpoints específicos do ERP.
 *   Implementar lógica de retentativas (`MAX_RETRIES`) em caso de falhas de rede ou erros específicos (como 401 para token expirado).
 *   Tratar erros de comunicação com o ERP e lançar exceções específicas (`ErpIntegrationError`, `ErpNotFoundError`) para a camada de serviço (`src/services`).
-*   Mapear as respostas JSON do ERP para os modelos de domínio definidos em `src/domain` (ex: `ProductItem`, `CostResponse`, `IndividualDataModel`).
-*   Gerenciar a paginação das APIs do ERP, buscando todas as páginas necessárias para retornar um conjunto completo de dados.
+*   Mapear as respostas JSON do ERP para os modelos de domínio definidos em `src/domain` (ex: `ProductItem`, `CostResponse`, `IndividualDataModel`, `DocumentResponseModel`).
+*   Gerenciar a paginação das APIs do ERP, buscando todas as páginas necessárias para retornar um conjunto completo de dados quando aplicável.
 
 ## Interações
 

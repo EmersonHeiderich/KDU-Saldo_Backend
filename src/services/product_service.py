@@ -87,13 +87,3 @@ class ProductService:
             logger.error(f"Error getting product balance matrix for '{reference_code}': {e}", exc_info=True)
             # Wrap generic or ERP errors
             raise ServiceError(f"Failed to retrieve product balance matrix: {e}") from e
-
-    # --- REMOVED get_product_variant_details ---
-    # The frontend will now use the product_items returned by get_product_balance_matrix_with_items
-    # def get_product_variant_details(...) -> Dict[str, Any]:
-    #     ... (previous implementation removed) ...
-
-    # --- REMOVED _format_product_variant_details ---
-    # Formatting will now happen in the frontend based on the cached product_items
-    # def _format_product_variant_details(...) -> Dict[str, Any]:
-    #     ... (previous implementation removed) ...

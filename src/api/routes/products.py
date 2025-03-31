@@ -107,15 +107,3 @@ def get_product_balance_matrix():
     except Exception as e:
         logger.error(f"Unexpected error fetching product matrix (Ref: {reference_code}): {e}", exc_info=True)
         return jsonify({"error": "An unexpected error occurred."}), 500
-
-# --- REMOVED /variant_details endpoint ---
-# The details are now derived from the /balance_matrix response on the frontend
-# @products_bp.route('/variant_details', methods=['GET'])
-# @login_required
-# @products_access_required
-# def get_product_variant_details():
-#     ... (previous implementation removed) ...
-
-# --- Service Instantiation (Done in app factory) ---
-# Ensure ProductService is instantiated and added to app.config['product_service']
-# in src/app.py

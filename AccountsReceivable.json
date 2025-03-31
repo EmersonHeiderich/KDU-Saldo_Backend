@@ -1,0 +1,1241 @@
+{
+    "openapi": "3.0.1",
+    "info": {
+      "title": "API Accounts Receivable",
+      "description": "TOTVS.Moda API Swagger Surface",
+      "contact": {
+        "name": "TOTVS.Moda Atendimento",
+        "url": "https://totvssuporte.zendesk.com",
+        "email": "atendimentova@totvs.com.br"
+      },
+      "license": {
+        "name": "TOTVS",
+        "url": "https://www.totvs.com/"
+      },
+      "version": "2.8.18"
+    },
+    "paths": {
+      "/api/totvsmoda/accounts-receivable/v2/documents/search": {
+        "post": {
+          "tags": [
+            "AccountsReceivable"
+          ],
+          "summary": "Obter dados de documentos de contas a receber.",
+          "requestBody": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentRequestModel"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentRequestModel"
+                }
+              },
+              "application/*+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentRequestModel"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Success",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/DocumentResponseModel"
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Bad Request",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/DomainNotificationMessage"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/totvsmoda/accounts-receivable/v2/bank-slip": {
+        "post": {
+          "tags": [
+            "AccountsReceivable"
+          ],
+          "summary": "Retorna o Base64 do Boleto Bancário.",
+          "requestBody": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BankSlipRequestModel"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BankSlipRequestModel"
+                }
+              },
+              "application/*+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BankSlipRequestModel"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Success",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/AccountsReceivableTomasResponseModel"
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Bad Request",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/DomainNotificationMessage"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/totvsmoda/accounts-receivable/v2/payment-link": {
+        "post": {
+          "tags": [
+            "AccountsReceivable"
+          ],
+          "summary": "Retorna o Link de Pagamento (PIX) da Fatura.",
+          "requestBody": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentLinkRequestModel"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentLinkRequestModel"
+                }
+              },
+              "application/*+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentLinkRequestModel"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Success",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/AccountsReceivableTomasResponseModel"
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Bad Request",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/DomainNotificationMessage"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "components": {
+      "schemas": {
+        "AccountsReceivableTomasResponseModel": {
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string",
+              "description": "Conteúdo retornado na execução do Tomas.",
+              "nullable": true
+            },
+            "unifaceResponseStatus": {
+              "type": "string",
+              "description": "Status da resposta da requisição do Tomas no Uniface.",
+              "nullable": true
+            },
+            "unifaceMessage": {
+              "type": "string",
+              "description": "Mensagem de retorno do Uniface.",
+              "nullable": true
+            }
+          },
+          "additionalProperties": false
+        },
+        "BankSlipRequestModel": {
+          "required": [
+            "branchCode",
+            "customerCode",
+            "installmentNumber",
+            "receivableCode"
+          ],
+          "type": "object",
+          "properties": {
+            "branchCode": {
+              "type": "integer",
+              "description": "Código de empresa. Campo \"Empresa\" do componente FCRFM001.\r\n\u003Cbr\u003ETamanho máximo de 4 caracteres.",
+              "format": "int32"
+            },
+            "customerCode": {
+              "type": "integer",
+              "description": "Código do cliente. Campo \"Cliente\" do componente FCRFM001.\r\n\u003Cbr\u003ETamanho máximo de 9 caracteres.\u003Cbr\u003ENão pode ser informado junto com customerCpfCnpj, mas um deles deverá ser informado.",
+              "format": "int32"
+            },
+            "customerCpfCnpj": {
+              "type": "string",
+              "description": "Cpf/Cnpj do cliente. Campo \"Cpf/Cnpj\" do componente PESFM010.\r\n\u003Cbr\u003ETamanho máximo de 14 caracteres, informar apenas números.\u003Cbr\u003ENão pode ser informado junto com customerCode, mas um deles deverá ser informado.",
+              "nullable": true
+            },
+            "receivableCode": {
+              "type": "integer",
+              "description": "Código da fatura do cliente. Campo \"Fatura\" do componente FCRFM001.\r\n\u003Cbr\u003ETamanho máximo de 10 caracteres.",
+              "format": "int64"
+            },
+            "installmentNumber": {
+              "type": "integer",
+              "description": "Número da parcela da fatura do cliente. Campo \"Parcela\" do componente FCRFM001.\r\n\u003Cbr\u003ETamanho máximo de 3 caracteres.",
+              "format": "int32"
+            }
+          },
+          "additionalProperties": false
+        },
+        "CalculatedValuesModel": {
+          "type": "object",
+          "properties": {
+            "daysLate": {
+              "type": "integer",
+              "description": "Dias de atraso.",
+              "format": "int32",
+              "nullable": true
+            },
+            "increaseValue": {
+              "type": "number",
+              "description": "Valor de acréscimo.",
+              "format": "double",
+              "nullable": true
+            },
+            "interestValue": {
+              "type": "number",
+              "description": "Valor de juros/mora.",
+              "format": "double",
+              "nullable": true
+            },
+            "fineValue": {
+              "type": "number",
+              "description": "Valor da multa",
+              "format": "double",
+              "nullable": true
+            },
+            "discountValue": {
+              "type": "number",
+              "description": "Valor total dos descontos",
+              "format": "double",
+              "nullable": true
+            },
+            "correctedValue": {
+              "type": "number",
+              "description": "Valor corridigo.",
+              "format": "double",
+              "nullable": true
+            }
+          },
+          "additionalProperties": false,
+          "description": "Valores calculados para títulos vencidos conforme a taxa de juros/multa do título."
+        },
+        "CheckInstallmentModel": {
+          "type": "object",
+          "properties": {
+            "checkBand": {
+              "type": "string",
+              "description": "Número da banda do cheque. Campo \"Banda magnética\" do frame \"Informação do cheque\" do componente FCRFM002(FCRFM001 -\u003E Botão informação cheque)",
+              "nullable": true
+            },
+            "checkReturnDate1": {
+              "type": "string",
+              "description": "Data de devolução do primeiro retorno do cheque. Campo \"Data devolução 1\" do frame \"Informação do cheque\" do componente FCRFM002(FCRFM001 -\u003E Botão informação cheque)",
+              "format": "date-time",
+              "nullable": true
+            },
+            "reasonForReturnCode1": {
+              "type": "integer",
+              "description": "Código do motivo de devolução do primeiro retorno do cheque. Campo \"Motivo devolução 1\" do frame \"Informação do cheque\" do componente FCRFM002(FCRFM001 -\u003E Botão informação cheque)",
+              "format": "int32",
+              "nullable": true
+            },
+            "reasonForReturnDescription1": {
+              "type": "string",
+              "description": "Descrição do motivo de devolução do primeiro retorno do cheque. Campo \"Motivo devolução 1\" do frame \"Informação do cheque\" do componente FCRFM002(FCRFM001 -\u003E Botão informação cheque)",
+              "nullable": true
+            },
+            "checkReturnDate2": {
+              "type": "string",
+              "description": "Data de devolução do segundo retorno do cheque. Campo \"Data devolução 2\" do frame \"Informação do cheque\" do componente FCRFM002(FCRFM001 -\u003E Botão informação cheque)",
+              "format": "date-time",
+              "nullable": true
+            },
+            "reasonForReturnCode2": {
+              "type": "integer",
+              "description": "Código do motivo de devolução do segundo retorno do cheque. Campo \"Motivo devolução 2\" do frame \"Informação do cheque\" do componente FCRFM002(FCRFM001 -\u003E Botão informação cheque)",
+              "format": "int32",
+              "nullable": true
+            },
+            "reasonForReturnDescription2": {
+              "type": "string",
+              "description": "Descrição do motivo de devolução do segundo retorno do cheque. Campo \"Motivo devolução 2\" do frame \"Informação do cheque\" do componente FCRFM002(FCRFM001 -\u003E Botão informação cheque)",
+              "nullable": true
+            },
+            "checkReturnDate3": {
+              "type": "string",
+              "description": "Data de devolução do terceiro retorno do cheque. Campo \"Data devolução 3\" do frame \"Informação do cheque\" do componente FCRFM002(FCRFM001 -\u003E Botão informação cheque)",
+              "format": "date-time",
+              "nullable": true
+            },
+            "reasonForReturnCode3": {
+              "type": "integer",
+              "description": "Código do motivo de devolução do terceiro retorno do cheque. Campo \"Motivo devolução 3\" do frame \"Informação do cheque\" do componente FCRFM002(FCRFM001 -\u003E Botão informação cheque)",
+              "format": "int32",
+              "nullable": true
+            },
+            "reasonForReturnDescription3": {
+              "type": "string",
+              "description": "Descrição do motivo de devolução do terceiro retorno do cheque. Campo \"Motivo devolução 3\" do frame \"Informação do cheque\" do componente FCRFM002(FCRFM001 -\u003E Botão informação cheque)",
+              "nullable": true
+            },
+            "bankNumber": {
+              "type": "integer",
+              "description": "Número do banco do cheque. Campo \"Banco\" do frame \"Informação do cheque\" do componente FCRFM002(FCRFM001 -\u003E Botão informação cheque)",
+              "format": "int32",
+              "nullable": true
+            },
+            "agencyNumber": {
+              "type": "integer",
+              "description": "Número da agência do banco do cheque.. Campo \"Agência\" do frame \"Informação do cheque\" do componente FCRFM002(FCRFM001 -\u003E Botão informação cheque)",
+              "format": "int32",
+              "nullable": true
+            },
+            "checkNumber": {
+              "type": "integer",
+              "description": "Número sequncial do cheque. Campo \"Número cheque\" do frame \"Informação do cheque\" do componente FCRFM002(FCRFM001 -\u003E Botão informação cheque)",
+              "format": "int32",
+              "nullable": true
+            },
+            "account": {
+              "type": "string",
+              "description": "Número da conta do cliente do cheque. Campo \"Conta\" do frame \"Informação do cheque\" do componente FCRFM002(FCRFM001 -\u003E Botão informação cheque)",
+              "nullable": true
+            },
+            "checkThirdName": {
+              "type": "string",
+              "description": "Nome do titular do cheque de terceiro. Campo \"Titular chq. terceiro\" do frame \"Informação do cheque\" do componente FCRFM002(FCRFM001 -\u003E Botão informação cheque)",
+              "nullable": true
+            }
+          },
+          "additionalProperties": false,
+          "description": "Lista de cheque da fatura."
+        },
+        "CommissionDataModel": {
+          "type": "object",
+          "properties": {
+            "commissionedCode": {
+              "type": "integer",
+              "description": "Código do comissionado. Campo \"Comissionado\" do bloco \"Comissionado\" do componente FCRFM001.\r\n\u003Cbr\u003ETamanho máximo de 9 caracteres",
+              "format": "int32"
+            },
+            "commissionedCpfCnpj": {
+              "type": "string",
+              "description": "CPF ou CNPJ do comissionado vinculado à pessoa do comissionado cadastrada no componente PESFM010.\r\nCampo \"Comissionado\" do bloco \"Comissionado\" do componente FCRFM001.\r\n\u003Cbr\u003ETamanho máximo de 14 caracteres",
+              "nullable": true
+            },
+            "typeCode": {
+              "type": "integer",
+              "description": "Código do tipo comissionado do bloco \"Comissionado\" do componente FCRFM001.\r\n\u003Cbr\u003ETamanho máximo de 3 caracteres",
+              "format": "int32"
+            },
+            "typeDescription": {
+              "type": "string",
+              "description": "Descrição do tipo comissionado do bloco \"Comissionado\" do componente FCRFM001.\r\n\u003Cbr\u003ETamanho máximo de 30 caracteres",
+              "nullable": true
+            },
+            "status": {
+              "type": "integer",
+              "description": "Situação da comissão. Campo \"Situação\" do bloco \"Comissionado\" do componente FCRFM001.\r\n\u003Cbr\u003E0 Normal\u003Cbr\u003E1 Excluida\u003Cbr\u003E2 Transferida\u003Cbr\u003E3 Transferida recebimento\u003Cbr\u003E4 Trocado comissionado\u003Cbr\u003E5 Responsabilidade\u003Cbr\u003E6 Abatida por exportação\u003Cbr\u003E9 Cancelada",
+              "format": "int32"
+            },
+            "percentageBilling": {
+              "type": "number",
+              "description": "Percentual de comissão de faturamento. Campo \"% Faturamento\" do bloco \"Comissionado\" do componente FCRFM001.\r\n\u003Cbr\u003ETamanho máximo: 3 números inteiros com 6 casas decimais.",
+              "format": "double"
+            },
+            "valueBilling": {
+              "type": "number",
+              "description": "Valor de comissão de faturamento. Campo \"Vl. comis. fat.\" do bloco \"Comissionado\" do componente FCRFM001.\r\n\u003Cbr\u003ETamanho máximo: 12 caracteres mais 2 caracteres para casas decimais.",
+              "format": "double"
+            },
+            "isPaidBilling": {
+              "type": "boolean",
+              "description": "Se a comissão de faturamento está paga. Campo Pago do bloco \"Comissionado\" do componente FCRFM001."
+            },
+            "percentageReceived": {
+              "type": "number",
+              "description": "Percentual de comissão de recebimento. Campo \"% Recebimento\" do bloco \"Comissionado\" do componente FCRFM001.\r\n\u003Cbr\u003ETamanho máximo: 3 números inteiros com 6 casas decimais.",
+              "format": "double"
+            },
+            "valueReceived": {
+              "type": "number",
+              "description": "Valor de comissão de recebimento. Campo \"Vl. comis. rec.\" do bloco \"Comissionado\" do componente FCRFM001.\r\n\u003Cbr\u003ETamanho máximo: 12 caracteres mais 2 caracteres para casas decimais.",
+              "format": "double"
+            },
+            "isPaidReceived": {
+              "type": "boolean",
+              "description": "Se a comissão de recebimento está paga. Campo Pago do bloco \"Comissionado\" do componente FCRFM001."
+            },
+            "rebateValue": {
+              "type": "number",
+              "description": "Valor de abatimento que incide na comissão. Frame Comissão - Campo Abatimento - Valor - do componente COMFC008 -\u003E \"Detalhe\"  COMFD008.",
+              "format": "double",
+              "nullable": true
+            },
+            "paymentCompany": {
+              "type": "integer",
+              "description": "Se a comissão está paga. Código da empresa do fechamento da comissão. Frame Fechamento - Campo Emp. - do componente COMFC008 -\u003E \"Detalhe\" COMFD008.\r\n\u003Cbr\u003ETamanho máximo de 4 caracteres",
+              "format": "int32",
+              "nullable": true
+            },
+            "paymentDateReceived": {
+              "type": "string",
+              "description": "Se a comissão de recebimento está paga. Data do fechamento do recebimento da comissão. Frame Fechamento - Campo Data - do componente COMFC008 -\u003E \"Detalhe\" COMFD008.",
+              "format": "date-time",
+              "nullable": true
+            },
+            "paymentCodeReceived": {
+              "type": "number",
+              "description": "Se a comissão de recebimento está paga. Número do fechamento do recebimento da comissão. Frame Fechamento - Campo Fechamento - do componente COMFC008 -\u003E \"Detalhe\" COMFD008.\r\n\u003Cbr\u003ETamanho máximo de 9 caracteres",
+              "format": "double",
+              "nullable": true
+            },
+            "paymentDateBilling": {
+              "type": "string",
+              "description": "Se a comissão de faturamento está paga. Data do fechamento do pagamento da comissão. Frame Fechamento - Campo Data - do componente COMFC008 -\u003E \"Detalhe\" COMFD008.",
+              "format": "date-time",
+              "nullable": true
+            },
+            "paymentCodeBilling": {
+              "type": "number",
+              "description": "Se a comissão de faturamento está paga. Número do fechamento do pagamento  da comissão. Frame Fechamento - Campo Fechamento - do componente COMFC008 -\u003E \"Detalhe\" COMFD008.\r\n\u003Cbr\u003ETamanho máximo de 9 caracteres",
+              "format": "double",
+              "nullable": true
+            }
+          },
+          "additionalProperties": false,
+          "description": "Lista de comissão relacionado a fatura."
+        },
+        "DocumentChangeModel": {
+          "type": "object",
+          "properties": {
+            "startDate": {
+              "type": "string",
+              "description": "Data/hora inicial de alteração.",
+              "format": "date-time",
+              "nullable": true
+            },
+            "endDate": {
+              "type": "string",
+              "description": "Data/hora final de alteração.",
+              "format": "date-time",
+              "nullable": true
+            },
+            "inCheck": {
+              "type": "boolean",
+              "description": "Houve alteração de cheque."
+            }
+          },
+          "additionalProperties": false
+        },
+        "DocumentFilterModel": {
+          "type": "object",
+          "properties": {
+            "change": {
+              "$ref": "#/components/schemas/DocumentChangeModel"
+            },
+            "branchCodeList": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "description": "Lista de código empresa. Campo \"Código\" do componente GERFM009.",
+              "nullable": true
+            },
+            "customerCodeList": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "description": "Lista de código de cliente. Campo \"Código\" do componente PESFM010.",
+              "nullable": true
+            },
+            "customerCpfCnpjList": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Lista de código CPF/CNPJ de cliente. Campo \"Número CPF\" ou \"Número CNPJ\" do componente PESFM010.",
+              "nullable": true
+            },
+            "startExpiredDate": {
+              "type": "string",
+              "description": "Filtro inicial de data de vencimento da fatura. Campo \"Data.vencto\" do componente FCRFM001.",
+              "format": "date-time",
+              "nullable": true
+            },
+            "endExpiredDate": {
+              "type": "string",
+              "description": "Filtro final de data de vencimento da fatura. Campo \"Data.vencto\" do componente FCRFM001.",
+              "format": "date-time",
+              "nullable": true
+            },
+            "startPaymentDate": {
+              "type": "string",
+              "description": "Filtro inicial de data de baixa da fatura. Campo \"Data liquidação\" do componente FCRFM001 botão \"Informação baixa\".",
+              "format": "date-time",
+              "nullable": true
+            },
+            "endPaymentDate": {
+              "type": "string",
+              "description": "Filtro final de data de baixa da fatura. Campo \"Data liquidação\" do componente FCRFM001 botão \"Informação baixa\".",
+              "format": "date-time",
+              "nullable": true
+            },
+            "startIssueDate": {
+              "type": "string",
+              "description": "Filtro inicial de data de emissão da fatura. Campo \"Dt.emissão\" do componente FCRFM001.",
+              "format": "date-time",
+              "nullable": true
+            },
+            "endIssueDate": {
+              "type": "string",
+              "description": "Filtro final de data de emissão da fatura. Campo \"Dt.emissão\" do componente FCRFM001.",
+              "format": "date-time",
+              "nullable": true
+            },
+            "startCreditDate": {
+              "type": "string",
+              "description": "Filtro inicial de data de liquidação da fatura. Campo \"Emp./Dt.Crédito/Nr.Liq\" do componente FCRFM001.",
+              "format": "date-time",
+              "nullable": true
+            },
+            "endCreditDate": {
+              "type": "string",
+              "description": "Filtro final de data de liquidação da fatura. Campo \"Emp./Dt.Crédito/Nr.Liq\" do componente FCRFM001.",
+              "format": "date-time",
+              "nullable": true
+            },
+            "statusList": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "description": " Filtro de Tipo de situação. Campo \"Situação\" do componente \"FCRFM001\"\r\n\u003Cbr\u003E Neste filtro deve ser informado o código númerico referente ao tipo de situação \u003Cbr\u003E 1 - Normal \u003Cbr\u003E 2 - Devolvido \u003Cbr\u003E 3 - Cancelado \u003Cbr\u003E 4 - Quebrada ",
+              "nullable": true
+            },
+            "documentTypeList": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "description": "Filtro de Tipo de documento. Campo \"Tipo documento\" do componente \"FCRFM001\"\r\n\u003Cbr\u003E Neste filtro deve ser informado o código númerico referente ao tipo de documento \u003Cbr\u003E 1 - fatura  \u003Cbr\u003E 2 - cheque  \u003Cbr\u003E 3 - dinheiro  \u003Cbr\u003E 4 - cartão de crédito  \u003Cbr\u003E 5 - cartão de débito  \u003Cbr\u003E 6 - nota débeito \u003Cbr\u003E 7 - TEF  \u003Cbr\u003E 8 - cheque TEF  \u003Cbr\u003E 9 - Toco  \u003Cbr\u003E 10 - Adiantamento(saida cx.)  \u003Cbr\u003E 11 - desconto financeiro \u003Cbr\u003E 12 - DOFINI   \u003Cbr\u003E 13 - vale  \u003Cbr\u003E 14 - nota promissoria  \u003Cbr\u003E 15 - cheque garantido  \u003Cbr\u003E 16 - TED/DOC  \u003Cbr\u003E 17 - pré-autorização TEF  \u003Cbr\u003E 18 - cheque presente  \u003Cbr\u003E 19 - TEF/TECBAN - BANRISUL \u003Cbr\u003E 20 - CREDEV  \u003Cbr\u003E 21 - cartão próprio  \u003Cbr\u003E 22 - TEF/HYPERCARD  \u003Cbr\u003E 23 - Bônus desconto \u003Cbr\u003E 25 - voucher  \u003Cbr\u003E 26 - PIX  \u003Cbr\u003E 27 - PicPay  \u003Cbr\u003E 28 - ame  \u003Cbr\u003E 29 - Mercado pago  \u003Cbr\u003E 30 - Marketplace \u003Cbr\u003E 50 - Outro documento ",
+              "nullable": true
+            },
+            "billingTypeList": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "description": "Filtro de Tipo de faturamento. Campo \"Tipo faturamento\" do componente \"FCRFM001\"\r\n\u003Cbr\u003E Neste filtro deve ser informado o código númerico referente ao tipo de faturamento \u003Cbr\u003E 1 - Venda à vista \u003Cbr\u003E 2 - Venda a prazo \u003Cbr\u003E 3 - Recebimento à vista \u003Cbr\u003E 4 - Recebimento a prazo \u003Cbr\u003E 5 - Juro \u003Cbr\u003E 6 - Adiantamento(entrada cx) \u003Cbr\u003E 7 - Dev. adiantamento \u003Cbr\u003E 8 - Tarifa \u003Cbr\u003E 9 - Outra despesa \u003Cbr\u003E 10 - Emprestimo \u003Cbr\u003E 11 - Troca Cheque Por Dinheiro \u003Cbr\u003E 12 - Renegociação de titulo \u003Cbr\u003E 13 - Cobrança cartão \u003Cbr\u003E 14 - Cheque devolvido \u003Cbr\u003E 15 - Compra cheque presente \u003Cbr\u003E 16 - Prestação conta agencia \u003Cbr\u003E 17 - Via exportação \u003Cbr\u003E 18 - Agrupamento de Fatura \u003Cbr\u003E 19 - Vale/adiant. funcionário \u003Cbr\u003E 20 - Locação \u003Cbr\u003E 21 - Cheque presente \u003Cbr\u003E 22 - Recebimento fatura terceiro \u003Cbr\u003E 23 - Cessão direito/crédito \u003Cbr\u003E 24 - Compra para terceiros \u003Cbr\u003E 25 - serviço \u003Cbr\u003E 26 - Titulo terceiros \u003Cbr\u003E 27 - Correção monetária \u003Cbr\u003E 30 - Correio \u003Cbr\u003E 31 - Transferencia de divida \u003Cbr\u003E 32 - Quebra \u003Cbr\u003E 33 - Endosso central de guias \u003Cbr\u003E 34 - Fatura central de guias \u003Cbr\u003E 35 - Condominio \u003Cbr\u003E 36 - Fechamento de Convênio \u003Cbr\u003E 37 - Rateio de despesas \u003Cbr\u003E 38 - Rareio de receitas \u003Cbr\u003E 39 - Pgto duplicata entre empresas \u003Cbr\u003E 40 - Receb faturas entre empresas \u003Cbr\u003E 41 - Receb Chq Pres de outra empresa \u003Cbr\u003E 42 - Transf. saldo entre empresas ",
+              "nullable": true
+            },
+            "dischargeTypeList": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "description": "Filtro de Tipo de baixa. Campo \"Tipo baixa\" do componente \"FCRFM001\"\r\n\u003Cbr\u003E Neste filtro deve ser informado o código númerico referente ao tipo de baixa \u003Cbr\u003E 0 - Título não baixado\u003Cbr\u003E 1 - Via recebimento\u003Cbr\u003E 2 - Baixa para depósito\u003Cbr\u003E 3 - Agrupamento de fatura\u003Cbr\u003E 4 - Devolução de adiant.\u003Cbr\u003E 5 - - Deb. conta (comis., folha)\u003Cbr\u003E 6 - Automática (outro proc)\u003Cbr\u003E 7 - Via banco\u003Cbr\u003E 8 - Baixa para desconto\u003Cbr\u003E 9 - Baixa por renegociação\u003Cbr\u003E 10 - Via faturamento\u003Cbr\u003E 11 - Recebimento de garantia\u003Cbr\u003E 12 - Baixa por conta bancária\u003Cbr\u003E 13 - Baixa na conta representante\u003Cbr\u003E 14 - Baixa por recálculo de cartão\u003Cbr\u003E 15 - Baixa por central de operação\u003Cbr\u003E 16 - Isentado\u003Cbr\u003E 17 - Baixa por abatimento total\u003Cbr\u003E 18 - Baixa título descontado\u003Cbr\u003E 19 - Baixa transferência dívida\u003Cbr\u003E 20 - Baixa por extrato eletronico\u003Cbr\u003E 21 - Baixa por prorrogação\u003Cbr\u003E 22 - Baixa por exportação\u003Cbr\u003E 23 - Baixa por vendor\u003Cbr\u003E 24 - Baixa fatura de funcionário\u003Cbr\u003E 25 - Baixa fatura sócio\u003Cbr\u003E 26 - Baixa adiantamento futuro\u003Cbr\u003E 27 - Baixa CREDEV futuro\u003Cbr\u003E 28 - Baixa título endossado\u003Cbr\u003E 29 - Desconto em comissão\u003Cbr\u003E 30 - Baixa acerto loja\u003Cbr\u003E 31 - Baixa cartão com credev\u003Cbr\u003E 32 - Baixa por Quebra\u003Cbr\u003E 33 - Baixa cobrança terceirizada\u003Cbr\u003E 34 - Baixa por retirada de cobrança terceirizada\u003Cbr\u003E 35 - Boleto e-commerce\u003Cbr\u003E 36 - Baixa por título de terceiros\u003Cbr\u003E 37 - Fechamento de Convênio\u003Cbr\u003E 38 - Acerto entre empresas\u003Cbr\u003E 39 - Baixa adiant. operadora\u003Cbr\u003E 40 - Depósito e-commerce\u003Cbr\u003E 41 - Transferência online e-commerce\u003Cbr\u003E 50 - Outra baixa",
+              "nullable": true
+            },
+            "chargeTypeList": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "description": "Filtro de Tipo de cobança. Campo \"Tipo cobrança\" do componente \"FCRFM001\"\r\n\u003Cbr\u003E Neste filtro deve ser informado o código númerico referente ao tipo de cobrança \u003Cbr\u003E 0 - Não está em cobrança \u003Cbr\u003E 1 - Simples \u003Cbr\u003E 2 - Descontada \u003Cbr\u003E 3 - Caucionada \u003Cbr\u003E 4 - Vinculada \u003Cbr\u003E 5 - Sem registro \u003Cbr\u003E 6 - Vendor \u003Cbr\u003E 8 - Protestado \u003Cbr\u003E 9 - Custódia \u003Cbr\u003E 11 - Retirado para renegociação \u003Cbr\u003E 12 - Fora de negociação \u003Cbr\u003E 13 - Endossado \u003Cbr\u003E 14 - Operadora de crédito \u003Cbr\u003E 15 - Em cartório \u003Cbr\u003E 16 - Cobrança na loja/empresa \u003Cbr\u003E 17 - Aguardando recebimento \u003Cbr\u003E 18 - Direto para boleto \u003Cbr\u003E 19 - Abatimento total \u003Cbr\u003E 20 - Custodia chq recusado \u003Cbr\u003E 21 - Custodia chq baixa/retirada \u003Cbr\u003E 22 - Custodia chq devolucao \u003Cbr\u003E 23 - Desconto chq recusado \u003Cbr\u003E 24 - Desconto chq baixa/retirada \u003Cbr\u003E 25 - Desconto chq devolucao \u003Cbr\u003E 26 - Cobrança terceirizada \u003Cbr\u003E 27 - SCPC \u003Cbr\u003E 28 - Exportação \u003Cbr\u003E 29 - Cessão direito/crédito \u003Cbr\u003E 30 - Compra para terceiros \u003Cbr\u003E 31 - Convênio \u003Cbr\u003E 32 - Cobrança judicial \u003Cbr\u003E 33 - Negativado \u003Cbr\u003E 34 - Sustado em cartório \u003Cbr\u003E 35 - Protesto cancelado \u003Cbr\u003E 36 - Disponível para cartório \u003Cbr\u003E 51 - Reserva cob. simples \u003Cbr\u003E 52 - Reserva cob. desc. fat. \u003Cbr\u003E 53 - Reserva cob. desc. chq. \u003Cbr\u003E 54 - Reserva cob. caucionada \u003Cbr\u003E 56 - Reserva cob. vinculada \u003Cbr\u003E 59 - Reserva cob. vendor \u003Cbr\u003E 60 - Reserva cob. custódia \u003Cbr\u003E 70 - Reserva para endosso \u003Cbr\u003E 80 - Reserva cheque \u003Cbr\u003E 85 - Reserva desconto custódia \u003Cbr\u003E 90 - Reserva desconto compror \u003Cbr\u003E 98 - Perdas \u003Cbr\u003E 99 - PDD - Fundo Perdido ",
+              "nullable": true
+            },
+            "hasOpenInvoices": {
+              "type": "boolean",
+              "description": "Indica filtro de fatura em aberto",
+              "nullable": true
+            },
+            "receivableCodeList": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "format": "double"
+              },
+              "description": "Lista de código de fatura. Campo \"Fatura\" do frame \"Fatura\" do componente FCRFM001.",
+              "nullable": true
+            },
+            "ourNumberList": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "format": "double"
+              },
+              "description": "Lista de \"Nosso número\" referente a parcela da fatura. Campo \"Nosso número\" do frame \"Parcela\" do componente FCRFM001.",
+              "nullable": true
+            },
+            "commissionedCode": {
+              "type": "integer",
+              "description": "Filtro pelo Código do comissionado. Campo \"Comissionado\" do bloco \"Comissionado\" do componente FCRFM001.\r\n\u003Cbr\u003ETamanho máximo de 9 caracteres\u003Cbr\u003ENão deve ser informado junto com o CommissionedCpfCnpj",
+              "format": "int32",
+              "nullable": true
+            },
+            "commissionedCpfCnpj": {
+              "type": "string",
+              "description": "Filtro pelo CPF ou CNPJ do comissionado vinculado à pessoa do comissionado cadastrada no componente PESFM010.\r\nCampo \"Comissionado\" do bloco \"Comissionado\" do componente FCRFM001.\r\n\u003Cbr\u003ETamanho máximo de 14 caracteres\u003Cbr\u003ENão deve ser informado junto com o CommissionedCode",
+              "nullable": true
+            },
+            "closingCodeCommission": {
+              "type": "integer",
+              "description": "Se a comissão está paga. Filtro pelo Número do fechamento da comissão. Frame Fechamento - Campo Fechamento - do componente COMFC008 -\u003E \"Detalhe\" COMFD008.\r\n\u003Cbr\u003ETamanho máximo de 9 caracteres\u003Cbr\u003EAo informar obrigatório também informar o ClosingCompanyCommission e ClosingDateCommission",
+              "format": "int32",
+              "nullable": true
+            },
+            "closingCompanyCommission": {
+              "type": "integer",
+              "description": "Se a comissão está paga. Filtro pelo Código da empresa do fechamento da comissão. Frame Fechamento - Campo Emp. - do componente COMFC008 -\u003E \"Detalhe\" COMFD008.\r\n\u003Cbr\u003ETamanho máximo de 4 caracteres\u003Cbr\u003EAo informar obrigatório também informar o ClosingCodeCommission e ClosingDateCommission",
+              "format": "int32",
+              "nullable": true
+            },
+            "closingDateCommission": {
+              "type": "string",
+              "description": "Se a comissão está paga. Filtro pela Data do fechamento da comissão. Frame Fechamento - Campo Data - do componente COMFC008 -\u003E \"Detalhe\" COMFD008.\r\n\u003Cbr\u003EAo informar obrigatório também informar o ClosingCompanyCommission e ClosingCodeCommission",
+              "format": "date-time",
+              "nullable": true
+            },
+            "closingCommissionedCode": {
+              "type": "integer",
+              "description": "Filtro pelo código do comissionado do fechamento de comissão. Campo \"Comissionado\" do bloco \"Comissão\" do componente COMFC008 -\u003E \"Detalhe\" COMFD008.\r\n\u003Cbr\u003ETamanho máximo de 9 caracteres\u003Cbr\u003ENão deve ser informado junto com o ClosingCommissionedCpfCnpj",
+              "format": "int32",
+              "nullable": true
+            },
+            "closingCommissionedCpfCnpj": {
+              "type": "string",
+              "description": "Filtro pelo CPF ou CNPJ do comissionado vinculado à pessoa do comissionado cadastrada no componente PESFM010.\r\nCampo \"Comissionado\" do bloco \"Comissão\" do componente COMFC008 -\u003E \"Detalhe\" COMFD008.\r\n\u003Cbr\u003ETamanho máximo de 14 caracteres\u003Cbr\u003ENão deve ser informado junto com o ClosingCommissionedCode",
+              "nullable": true
+            }
+          },
+          "additionalProperties": false
+        },
+        "DocumentModel": {
+          "type": "object",
+          "properties": {
+            "branchCode": {
+              "type": "integer",
+              "description": "Código da empresa da fatura. Campo \"Empresa\" do frame \"Fatura\" do componente FCRFM001.",
+              "format": "int32"
+            },
+            "customerCode": {
+              "type": "integer",
+              "description": "Código do cliente da fatura. Campo \"Cliente\" do frame \"Fatura\" do componente FCRFM001.",
+              "format": "int32"
+            },
+            "customerCpfCnpj": {
+              "type": "string",
+              "description": "CPF/CNPJ do cliente. Campo \"Número CPF\" ou \"Número CNPJ\" do componente PESFM010.",
+              "nullable": true
+            },
+            "receivableCode": {
+              "type": "integer",
+              "description": "Código da fatura. Campo \"Fatura\" do frame \"Fatura\" do componente FCRFM001.",
+              "format": "int64"
+            },
+            "installmentCode": {
+              "type": "integer",
+              "description": "Código da parcela fatura. Campo \"Parcela\" do frame \"Parcela\" do componente FCRFM001.",
+              "format": "int32"
+            },
+            "maxChangeFilterDate": {
+              "type": "string",
+              "description": "Maior data de alteração dentro do filtro de intervalo de data. Campo populado apenas quando os campos \"filter.change.startDate\" e \"filter.change.endDate\" são informados.",
+              "format": "date-time",
+              "nullable": true
+            },
+            "expiredDate": {
+              "type": "string",
+              "description": "Data de vencimento parcela da fatura. Campo \"Data vencto.\" do frame \"Parcela\" do componente FCRFM001.",
+              "format": "date-time",
+              "nullable": true
+            },
+            "paymentDate": {
+              "type": "string",
+              "description": "Data de pagamento da parcela da fatura. Campo \"Oper./Pagamento\" do frame \"Parcela\" do componente FCRFM001.",
+              "format": "date-time",
+              "nullable": true
+            },
+            "issueDate": {
+              "type": "string",
+              "description": "Data de emissão da parcela da fatura. Campo \"Dt. emissão\" do frame \"Parcela\" do componente FCRFM001.",
+              "format": "date-time",
+              "nullable": true
+            },
+            "settlementBranchCode": {
+              "type": "integer",
+              "description": "Empresa da liquidação da parcela da fatura. Campo \"Emp/Dt. crédito/Nr. liq\" do frame \"Parcela\" do componente FCRFM001.",
+              "format": "int32",
+              "nullable": true
+            },
+            "settlementDate": {
+              "type": "string",
+              "description": "Data de crédito da parcela da fatura. Campo \"Emp/Dt. crédito/Nr. liq\" do frame \"Parcela\" do componente FCRFM001.",
+              "format": "date-time",
+              "nullable": true
+            },
+            "settlementSequence": {
+              "type": "integer",
+              "description": "Nr. da liquidação da parcela da fatura. Campo \"Emp/Dt. crédito/Nr. liq\" do frame \"Parcela\" do componente FCRFM001.",
+              "format": "int32",
+              "nullable": true
+            },
+            "status": {
+              "$ref": "#/components/schemas/ReceivableStatusType"
+            },
+            "documentType": {
+              "$ref": "#/components/schemas/DocumentTypeSearchAvailable"
+            },
+            "billingType": {
+              "$ref": "#/components/schemas/ReceivableBillingType"
+            },
+            "dischargeType": {
+              "$ref": "#/components/schemas/ReceivableDischargeType"
+            },
+            "chargeType": {
+              "$ref": "#/components/schemas/ReceivableChargeType"
+            },
+            "originInstallment": {
+              "type": "integer",
+              "description": "Parcela origem relacionado a parcela. Campo \"Parcela origem\" do frame \"Parcela\" do componente FCRFM001.",
+              "format": "int32",
+              "nullable": true
+            },
+            "bearerCode": {
+              "type": "integer",
+              "description": "Código do portador da parcela da fatura. Campo \"Portador\" do frame \"Parcela\" do componente FCRFM001.",
+              "format": "int32",
+              "nullable": true
+            },
+            "bearerName": {
+              "type": "string",
+              "description": "Nome do portador da parcela da fatura. Campo \"Portador\" do frame \"Parcela\" do componente FCRFM001.",
+              "nullable": true
+            },
+            "installmentValue": {
+              "type": "number",
+              "description": "Valor da parcela da fatura. Campo \"Valor\" do frame \"Parcela\" do componente FCRFM001.",
+              "format": "double",
+              "nullable": true
+            },
+            "paidValue": {
+              "type": "number",
+              "description": "Valor pago da parcela da fatura. Campo \"Vl. pago\" do frame \"Parcela\" do componente FCRFM001.",
+              "format": "double",
+              "nullable": true
+            },
+            "netValue": {
+              "type": "number",
+              "description": "Valor líquido da parcela da fatura. Campo \"Valor líquido\" do frame \"Parcela\" do componente FCRFM001.",
+              "format": "double",
+              "nullable": true
+            },
+            "discountValue": {
+              "type": "number",
+              "description": "Valor de desconto da parcela da fatura. Campo \"Valor desconto\" do frame \"Valor dedução\" do componente FCRFM001.",
+              "format": "double",
+              "nullable": true
+            },
+            "rebateValue": {
+              "type": "number",
+              "description": "Valor de abatimento da parcela da fatura. Campo \"Valor abatimento\" do frame \"Valor dedução\" do componente FCRFM001.",
+              "format": "double",
+              "nullable": true
+            },
+            "interestValue": {
+              "type": "number",
+              "description": "Valor de juros da parcela da fatura. Campo \"Valor juro\" do frame \"Valor acréscimo\" do componente FCRFM001.",
+              "format": "double",
+              "nullable": true
+            },
+            "assessmentValue": {
+              "type": "number",
+              "description": "Valor de multa da parcela da fatura. Campo \"Valor multa\" do frame \"Valor acréscimo\" do componente FCRFM001.",
+              "format": "double",
+              "nullable": true
+            },
+            "barCode": {
+              "type": "string",
+              "description": "Imagem do código de barras da parcela da fatura. Imagem do código de barras do boleto impresso pelo componente FCRFP098.",
+              "nullable": true
+            },
+            "digitableLine": {
+              "type": "string",
+              "description": "Linha digitável da parcela da fatura. Código da linha digitável do boleto impresso pelo componente FCRFP098.",
+              "nullable": true
+            },
+            "ourNumber": {
+              "type": "integer",
+              "description": "Nosso número da parcela da fatura. Campo \"Nosso número\" do frame \"Parcela\" do componente FCRFM001.",
+              "format": "int64",
+              "nullable": true
+            },
+            "dacOurNumber": {
+              "type": "string",
+              "description": "DAC nosso número da parcela da fatura. Campo \"Nosso número\" do frame \"Valor acréscimo\" do componente FCRFM001.",
+              "nullable": true
+            },
+            "qrCodePix": {
+              "type": "string",
+              "description": "Link de pagamento para PIX. Campo \"link\" do conteúdo do retorno da geração do PIX no componente GERFC014.",
+              "nullable": true
+            },
+            "dischargeUser": {
+              "type": "integer",
+              "description": "Operador de baixa da parcela da fatura. Campo \"Oper./Pagamento\" do frame \"Parcela\" do componente FCRFM001.",
+              "format": "int32",
+              "nullable": true
+            },
+            "registrationUser": {
+              "type": "integer",
+              "description": "Operador de cadastro da parcela da fatura. Campo \"Oper./Inclusão\" do frame \"Parcela\" do componente FCRFM001.",
+              "format": "int32"
+            },
+            "calculatedValues": {
+              "$ref": "#/components/schemas/CalculatedValuesModel"
+            },
+            "check": {
+              "$ref": "#/components/schemas/CheckInstallmentModel"
+            },
+            "invoice": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/InvoiceDataModel"
+              },
+              "nullable": true
+            },
+            "commissions": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/CommissionDataModel"
+              },
+              "nullable": true
+            }
+          },
+          "additionalProperties": false
+        },
+        "DocumentRequestModel": {
+          "type": "object",
+          "properties": {
+            "filter": {
+              "$ref": "#/components/schemas/DocumentFilterModel"
+            },
+            "expand": {
+              "type": "string",
+              "description": "Lista de grupo de dados para expansão separados por  \",\".\r\n\u003Cbr\u003EAs seguintes expressões são suportadas: \"check\", \"invoice\", \"commissioneds\", \"calculateValue\".\u003Cbr\u003EEx.: \"expand\": \"check,invoice,commissioneds,calculateValue\".",
+              "nullable": true
+            },
+            "order": {
+              "type": "string",
+              "description": " Lista de campos para ordenação separados por \",\". Para ordenação descendente utilizar o caracter \"-\".\r\n As seguintes expressões são suportadas: \"branchCode\", \"customerCode\",\"customerCpfCnpj\", \"receivableCode\", \"installmentCode\" e \"maxChangeFilterDate\"\r\nEx.: \"order\": \"-customerCode,maxChangeFilterDate\"",
+              "nullable": true
+            },
+            "page": {
+              "type": "integer",
+              "description": "Número da página. Página inicial é 1.",
+              "format": "int32"
+            },
+            "pageSize": {
+              "type": "integer",
+              "description": "Quantidade de itens por página. Valor padrão é 100. Valor máximo é 100.",
+              "format": "int32"
+            }
+          },
+          "additionalProperties": false
+        },
+        "DocumentResponseModel": {
+          "type": "object",
+          "properties": {
+            "count": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "totalPages": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "hasNext": {
+              "type": "boolean"
+            },
+            "totalItems": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "items": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/DocumentModel"
+              },
+              "nullable": true
+            }
+          },
+          "additionalProperties": false
+        },
+        "DocumentTypeSearchAvailable": {
+          "enum": [
+            "Invoice",
+            "Check",
+            "Cash",
+            "CreditCard",
+            "DebitCard",
+            "DebitNote"
+          ],
+          "type": "integer",
+          "description": "tipo de documento das faturas. Campo \"Tipo documento\" do componente FCRFM001\".\r\n\u003Cbr\u003E1 - Fatura\u003Cbr\u003E2 - Cheque\u003Cbr\u003E3 - Dinheiro\u003Cbr\u003E4 - Cartão de crédito\u003Cbr\u003E5 - Cartão de débito\u003Cbr\u003E6 - Nota de débito\u003Cbr\u003E Somente será realizado consulta para as tipagens acima",
+          "format": "int32"
+        },
+        "DomainNotificationMessage": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "type": "string",
+              "nullable": true,
+              "readOnly": true
+            },
+            "message": {
+              "type": "string",
+              "nullable": true,
+              "readOnly": true
+            },
+            "detailedMessage": {
+              "type": "string",
+              "nullable": true,
+              "readOnly": true
+            }
+          },
+          "additionalProperties": false
+        },
+        "InvoiceDataModel": {
+          "type": "object",
+          "properties": {
+            "branchCode": {
+              "type": "integer",
+              "description": "Código da empresa. Campo \"Empresa\" do componente FISFL030 -\u003E \"F12 na Nota fiscal\".",
+              "format": "int32"
+            },
+            "invoiceSequence": {
+              "type": "integer",
+              "description": "Código sequencial da nota fiscal. Campo \"Fatura\" do componente FISFL030 -\u003E \"F12 na Nota fiscal\".",
+              "format": "int32"
+            },
+            "invoiceDate": {
+              "type": "string",
+              "description": "Data de movimento da nota fiscal. Campo \"Data fatura\" do componente FISFL030 -\u003E \"F12 na Nota fiscal\".",
+              "format": "date-time"
+            },
+            "invoiceCode": {
+              "type": "integer",
+              "description": "Número da nota fiscal. Primeiro campo \"Nota fiscal\" do componente FISFL030 -\u003E \"F12 na Nota fiscal\".",
+              "format": "int32",
+              "nullable": true
+            }
+          },
+          "additionalProperties": false,
+          "description": "Documento fiscal."
+        },
+        "PaymentLinkRequestModel": {
+          "required": [
+            "branchCode",
+            "customerCode",
+            "installmentNumber",
+            "receivableCode"
+          ],
+          "type": "object",
+          "properties": {
+            "branchCode": {
+              "type": "integer",
+              "description": "Código de empresa. Campo \"Empresa\" do componente FCRFM001.\r\n\u003Cbr\u003ETamanho máximo de 4 caracteres.",
+              "format": "int32"
+            },
+            "customerCode": {
+              "type": "integer",
+              "description": "Código do cliente. Campo \"Cliente\" do componente FCRFM001.\r\n\u003Cbr\u003ETamanho máximo de 9 caracteres.\u003Cbr\u003ENão pode ser informado junto com customerCpfCnpj, mas um deles deverá ser informado.",
+              "format": "int32"
+            },
+            "customerCpfCnpj": {
+              "type": "string",
+              "description": "Cpf/Cnpj do cliente. Campo \"Cpf/Cnpj\" do componente PESFM010.\r\n\u003Cbr\u003ETamanho máximo de 14 caracteres, informar apenas números.\u003Cbr\u003ENão pode ser informado junto com customerCode, mas um deles deverá ser informado.",
+              "nullable": true
+            },
+            "receivableCode": {
+              "type": "integer",
+              "description": "Código da fatura do cliente. Campo \"Fatura\" do componente FCRFM001.\r\n\u003Cbr\u003ETamanho máximo de 10 caracteres.",
+              "format": "int64"
+            },
+            "installmentNumber": {
+              "type": "integer",
+              "description": "Número da parcela da fatura do cliente. Campo \"Parcela\" do componente FCRFM001.\r\n\u003Cbr\u003ETamanho máximo de 3 caracteres.",
+              "format": "int32"
+            },
+            "daysLate": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            },
+            "increaseValue": {
+              "type": "number",
+              "format": "double",
+              "nullable": true
+            },
+            "discountValue": {
+              "type": "number",
+              "format": "double",
+              "nullable": true
+            },
+            "fineValue": {
+              "type": "number",
+              "format": "double",
+              "nullable": true
+            },
+            "interestValue": {
+              "type": "number",
+              "format": "double",
+              "nullable": true
+            },
+            "correctedValue": {
+              "type": "number",
+              "format": "double",
+              "nullable": true
+            }
+          },
+          "additionalProperties": false
+        },
+        "ReceivableBillingType": {
+          "enum": [
+            "CashSale",
+            "InstallmentSale",
+            "CashReceivable",
+            "InstallmentReceivable",
+            "Interest",
+            "Advance",
+            "AdvanceReturn",
+            "Tariff",
+            "OtherExpense",
+            "Loan",
+            "ExchangeCheckForCash",
+            "TitleRenegotiation",
+            "ChargeCard",
+            "CheckReturned",
+            "PurchaseCheckCurrent",
+            "AccountabilityAgency",
+            "ViaExport",
+            "InvoiceGrouping",
+            "EmployeeVoucherAdvance",
+            "Location",
+            "CheckCurrent",
+            "ReceiptInvoiceOthers",
+            "RightAssignmentCredit",
+            "PurchaseForOthers",
+            "Service",
+            "OtherTitle",
+            "MonetaryCorrection",
+            "PostOffice",
+            "DebitTransfer",
+            "Break",
+            "EndorsementCentralGuides",
+            "InvoiceCentralGuides",
+            "Condominium",
+            "AgreementClosing",
+            "ApportionmentCosts",
+            "ApportionmentRevenue",
+            "PaymentDuplicateBetweenCompanies",
+            "ReceivingInvoicesBetweenCompanies",
+            "ReceivesCheckCurrentFromAnotherCompany",
+            "BalanceTransferBetweenCompanies"
+          ],
+          "type": "integer",
+          "description": "tipo de faturamento das faturas. Campo \"Tipo faturamento\" do componente FCRFM001\".\r\n\u003Cbr\u003E1 - Venda à vista\u003Cbr\u003E2 - Venda a prazo\u003Cbr\u003E3 - Recebimento à vista\u003Cbr\u003E4 - Recebimento a prazo\u003Cbr\u003E5 - Juro\u003Cbr\u003E6 - Adiantamento (entrada cx.)\u003Cbr\u003E7 - Dev.adiantamento\u003Cbr\u003E8 - Tarifa\u003Cbr\u003E9 - Outra despesa\u003Cbr\u003E10 - Emprestimo\u003Cbr\u003E11 - Troca cheque por Dinheiro\u003Cbr\u003E12 - Renegociação de título\u003Cbr\u003E13 - Cobrança cartão\u003Cbr\u003E14 - Cheque devolvido\u003Cbr\u003E15 - Compra cheque presente\u003Cbr\u003E16 - Prestacao conta agencia\u003Cbr\u003E17 - Via exportacao\u003Cbr\u003E18 - Agrupamento de Fatura\u003Cbr\u003E19 - Vale/adiant. funcionário\u003Cbr\u003E20 - Locação\u003Cbr\u003E21 - Cheque presente\u003Cbr\u003E22 - Recebimento fatura terceiro\u003Cbr\u003E23 - Cessão direito/crédito\u003Cbr\u003E24 - Compra para terceiros\u003Cbr\u003E25 - Serviço\u003Cbr\u003E26 - Título de terceiros\u003Cbr\u003E27 - Correção monetária\u003Cbr\u003E30 - Correio\u003Cbr\u003E31 - Transferência de dívida\u003Cbr\u003E32 - Quebra\u003Cbr\u003E33 - Endosso central de guias\u003Cbr\u003E34 - Fatura central de guias\u003Cbr\u003E35 - Condomínio\u003Cbr\u003E36 - Fechamento de Convênio\u003Cbr\u003E37 - Rateio de despesas\u003Cbr\u003E38 - Rateio de receitas\u003Cbr\u003E39 - Pgto duplicata entre empresas\u003Cbr\u003E40 - Receb faturas entre empresas\u003Cbr\u003E41 - Receb Chq Pres de outra empresa\u003Cbr\u003E42 - Transf. saldo entre empresas",
+          "format": "int32"
+        },
+        "ReceivableChargeType": {
+          "enum": [
+            "NotCharged",
+            "Simple",
+            "Discounted",
+            "Guaranteed",
+            "Linked",
+            "WithoutRegistration",
+            "Vendor",
+            "Protested",
+            "Custody",
+            "WithdrawnForRenegotiation",
+            "OutOfTrade",
+            "Endorsed",
+            "CreditOperator",
+            "InNotaryOffice",
+            "InStoreCompanyCharge",
+            "AwaitingReceipt",
+            "DirectToBoleto",
+            "TotalSupply",
+            "CustodyDeclinedCheck",
+            "CheckWithdrawalDeposit",
+            "CustodyReturnCheck",
+            "CheckDeclinedDiscount",
+            "LowCheckWithdrawalDiscount",
+            "CheckReturnDiscount",
+            "OutsourcedBilling",
+            "SCPC",
+            "Export",
+            "DirectAssignmentCredit",
+            "ThirdPartyPurchase",
+            "Agreement",
+            "JudicialCollection",
+            "Negative",
+            "SupportedByNotaryPublic",
+            "ProtestCanceled",
+            "AvailableForNotaryPublic",
+            "DigitalWallet",
+            "Bolepix",
+            "BookingSimpleCharge",
+            "ReservationChargeDiscountInvoice",
+            "ReservationChargeDiscountCheck",
+            "GuaranteedCollectionReserve",
+            "LinkedChargeReserve",
+            "VendorBillingReserve",
+            "CustodyChargeReservation",
+            "ReservationForEndorsement",
+            "ReservationCheck",
+            "ReserveCustodyDiscount",
+            "ReservationDiscountCompror",
+            "Losses",
+            "LostFund"
+          ],
+          "type": "integer",
+          "description": "Tipo de cobrança da parcela da fatura. Campo \"Tipo cobrança\" do frame \"Parcela\" do componente FCRFM001.    \r\n\u003Cbr\u003E0 - Não está em cobrança\u003Cbr\u003E1 - Simples\u003Cbr\u003E 2 - Descontada\u003Cbr\u003E 3 - Caucionada\u003Cbr\u003E 4 - Vinculada\u003Cbr\u003E 5 - Sem registro\u003Cbr\u003E 6 - Vendor\u003Cbr\u003E 8 - Protestado\u003Cbr\u003E 9 - Custódia\u003Cbr\u003E11 - Retirado para renegociação\u003Cbr\u003E12 - Fora de negociação\u003Cbr\u003E13 - Endossado\u003Cbr\u003E14 - Operadora de crédito\u003Cbr\u003E15 - Em cartório\u003Cbr\u003E16 - Cobrança na loja/empresa\u003Cbr\u003E17 - Aguardando recebimento\u003Cbr\u003E18 - Direto para boleto\u003Cbr\u003E19 - Abatimento total\u003Cbr\u003E20 - Custódia cheque recusado\u003Cbr\u003E21 - Custódia cheque baixa/retirada\u003Cbr\u003E22 - Custódia cheque devolução\u003Cbr\u003E23 - Desconto cheque recusado\u003Cbr\u003E24 - Desconto cheque baixa/retirada\u003Cbr\u003E25 - Desconto cheque devolução\u003Cbr\u003E26 - Cobrança terceirizada\u003Cbr\u003E27 - SCPC\u003Cbr\u003E28 - Exportação\u003Cbr\u003E29 - Cessão direito/crédito\u003Cbr\u003E30 - Compra para terceiros\u003Cbr\u003E31 - Convênio\u003Cbr\u003E32 - Cobrança Judicial\u003Cbr\u003E33 - Negativado\u003Cbr\u003E34 - Sustado em cartório\u003Cbr\u003E35 - Protesto cancelado\u003Cbr\u003E36 - Disponível para cartório\u003Cbr\u003E37 - Carteira digital\u003Cbr\u003E38 - Bolepix\u003Cbr\u003E51 - Reserva cobrança simples\u003Cbr\u003E52 - Reserva cobrança desconto faturado\u003Cbr\u003E53 - Reserva cobrança desconto cheque\u003Cbr\u003E54 - Reserva cobrança caucionada\u003Cbr\u003E56 - Reserva cobrança vinculada\u003Cbr\u003E59 - Reserva cobrança vendor\u003Cbr\u003E60 - Reserva cobrança custódia\u003Cbr\u003E70 - Reserva para endosso\u003Cbr\u003E80 - Reserva cheque\u003Cbr\u003E85 - Reserva desconto custódia\u003Cbr\u003E90 - Reserva desconto compror\u003Cbr\u003E98 - Perdas\u003Cbr\u003E99 - PDD - Fundo perdido",
+          "format": "int32"
+        },
+        "ReceivableDischargeType": {
+          "enum": [
+            "TitleNotDischarged",
+            "ViaReceipt",
+            "DischargeForDeposit",
+            "InvoiceGrouping",
+            "AdvanceReturn",
+            "DebitAccount",
+            "Automatic",
+            "ViaBank",
+            "DischargeForDiscount",
+            "DischargeByRenegotiation",
+            "ViaBilling",
+            "WarrantyReceipt",
+            "DischargeByBankAccount",
+            "DischargeOnRepresentativeAccount",
+            "DischargeByCardRecalculation",
+            "DischargeByOperationCenter",
+            "Exempt",
+            "DischargeByTotalReduction",
+            "DischargeDiscountedTitle",
+            "DischargeDebtTransfer",
+            "DischargeByElectronicExtract",
+            "DischargeByExtension",
+            "DischargeByExport",
+            "DischargeByVendor",
+            "DischargeEmployeeInvoice",
+            "DischargePartnerInvoice",
+            "DischargeFutureAdvance",
+            "DischargeCredevFuture",
+            "DischargeEndorsedTitle",
+            "CommissionDiscount",
+            "DischargeSettleShop",
+            "DischargeCardWithCredev",
+            "DischargeByBreak",
+            "DischargeOutsourcedBilling",
+            "DischargeByWithdrawalChargeOutsourced",
+            "EcommerceBillet",
+            "DischargeByThirdPartyTitle",
+            "AgreementClosing",
+            "SettleBetweenCompanies",
+            "EcommerceDeposit",
+            "OnlineEcommerceTransfer",
+            "AnotherDischarge"
+          ],
+          "type": "integer",
+          "description": "tipo de faturamento das faturas. Campo \"Tipo faturamento\" do componente FCRFM001\".\r\n\u003Cbr\u003E0 - Título não baixado\u003Cbr\u003E1 - Via recebimento\u003Cbr\u003E2 - Baixa para depósito\u003Cbr\u003E3 - Agrupamento de fatura\u003Cbr\u003E4 - Devolução de adiant.\u003Cbr\u003E5 - Deb. conta (comis., folha)\u003Cbr\u003E6 - Automática (outro proc)\u003Cbr\u003E7 - Via banco\u003Cbr\u003E8 - Baixa para desconto\u003Cbr\u003E9 - Baixa por renegociação\u003Cbr\u003E10 - Via faturamento\u003Cbr\u003E11 - Recebimento de garantia\u003Cbr\u003E12 - Baixa por conta bancária\u003Cbr\u003E13 - Baixa na conta representante\u003Cbr\u003E14 - Baixa por recálculo de cartão\u003Cbr\u003E15 - Baixa por central de operação\u003Cbr\u003E16 - Isentado\u003Cbr\u003E17 - Baixa por abatimento total\u003Cbr\u003E18 - Baixa título descontado\u003Cbr\u003E19 - Baixa transferência dívida\u003Cbr\u003E20 - Baixa por extrato eletronico\u003Cbr\u003E21 - Baixa por prorrogação\u003Cbr\u003E22 - Baixa por exportação\u003Cbr\u003E23 - Baixa por vendor\u003Cbr\u003E24 - Baixa fatura de funcionário\u003Cbr\u003E25 - Baixa fatura sócio\u003Cbr\u003E26 - Baixa adiantamento futuro\u003Cbr\u003E27 - Baixa CREDEV futuro\u003Cbr\u003E28 - Baixa título endossado\u003Cbr\u003E29 - Desconto em comissão\u003Cbr\u003E30 - Baixa acerto loja\u003Cbr\u003E31 - Baixa cartão com credev\u003Cbr\u003E32 - Baixa por Quebra\u003Cbr\u003E33 - Baixa cobrança terceirizada\u003Cbr\u003E34 - Baixa por retirada de cobrança terceirizada\u003Cbr\u003E35 - Boleto e-commerce\u003Cbr\u003E36 - Baixa por título de terceiros\u003Cbr\u003E37 - Fechamento de Convênio\u003Cbr\u003E38 - Acerto entre empresas\u003Cbr\u003E40 - Depósito e-commerces\u003Cbr\u003E41 - Transferência online e-commerce\u003Cbr\u003E50 - Outra baixa",
+          "format": "int32"
+        },
+        "ReceivableStatusType": {
+          "enum": [
+            "Normal",
+            "Returned",
+            "Canceled",
+            "Broken"
+          ],
+          "type": "integer",
+          "description": "Situação das faturas. Campo \"Situação\" do componente FCRFM001\".\r\n\u003Cbr\u003E1 - Normal\u003Cbr\u003E2 - Devolvido\u003Cbr\u003E3 - Cancelado\u003Cbr\u003E4 - Quebrada",
+          "format": "int32"
+        }
+      },
+      "securitySchemes": {
+        "Bearer": {
+          "type": "apiKey",
+          "description": "JWT Authorization header using the Bearer scheme. Example: \"Authorization: Bearer {token}\"",
+          "name": "Authorization",
+          "in": "header"
+        }
+      }
+    },
+    "security": [
+      {
+        "Bearer": []
+      }
+    ]
+  }

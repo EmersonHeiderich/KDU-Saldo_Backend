@@ -6,7 +6,8 @@ from .customer_service import CustomerService
 from .fabric_service import FabricService
 from .observation_service import ObservationService
 from .product_service import ProductService
-from .fiscal_service import FiscalService # Added Fiscal service
+from .fiscal_service import FiscalService
+from .accounts_receivable_service import AccountsReceivableService # <<<--- ADDED
 
 # Optionally initialize instances here if they are stateless singletons
 # and don't require request context or specific configurations per request.
@@ -22,5 +23,6 @@ __all__ = [
     "FabricService",
     "ObservationService",
     "ProductService",
-    "FiscalService", # Added Fiscal service
+    "FiscalService",
+    "AccountsReceivableService", # <<<--- ADDED
 ]

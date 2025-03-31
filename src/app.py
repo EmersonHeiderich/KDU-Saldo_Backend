@@ -19,7 +19,8 @@ from src.services import (
     FabricService,
     ObservationService,
     ProductService,
-    FiscalService # <<<--- ADDED
+    FiscalService,
+    AccountsReceivableService
 )
 # Import Repositories/ERP Services needed for Service instantiation
 from src.database import (
@@ -32,7 +33,8 @@ from src.erp_integration import (
     ErpCostService,
     ErpPersonService,
     ErpProductService,
-    ErpFiscalService # <<<--- ADDED
+    ErpFiscalService,
+    ErpAccountsReceivableService # <<<--- ADDED
 )
 
 
@@ -97,7 +99,8 @@ def create_app(config_object: Config) -> Flask:
         erp_cost_svc = ErpCostService(erp_auth_service)
         erp_person_svc = ErpPersonService(erp_auth_service)
         erp_product_svc = ErpProductService(erp_auth_service)
-        erp_fiscal_svc = ErpFiscalService(erp_auth_service) # <<<--- ADDED
+        erp_fiscal_svc = ErpFiscalService(erp_auth_service)
+        erp_ar_svc = ErpAccountsReceivableService(erp_auth_service) # <<<--- ADDED
 
         # Application Services
         auth_svc = AuthService(user_repo)
@@ -105,7 +108,8 @@ def create_app(config_object: Config) -> Flask:
         fabric_svc = FabricService(erp_balance_svc, erp_cost_svc, erp_product_svc)
         observation_svc = ObservationService(observation_repo)
         product_svc = ProductService(erp_balance_svc)
-        fiscal_svc = FiscalService(erp_fiscal_svc) # <<<--- ADDED
+        fiscal_svc = FiscalService(erp_fiscal_svc)
+        ar_svc = AccountsReceivableService(erp_ar_svc, erp_person_svc) # <<<--- ADDED
 
         # Store service instances in app config for access in routes/decorators
         app.config['auth_service'] = auth_svc
@@ -113,7 +117,8 @@ def create_app(config_object: Config) -> Flask:
         app.config['fabric_service'] = fabric_svc
         app.config['observation_service'] = observation_svc
         app.config['product_service'] = product_svc
-        app.config['fiscal_service'] = fiscal_svc # <<<--- ADDED
+        app.config['fiscal_service'] = fiscal_svc
+        app.config['accounts_receivable_service'] = ar_svc # <<<--- ADDED
         logger.info("Services instantiated and added to app config.")
 
     except Exception as service_init_err:

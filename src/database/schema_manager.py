@@ -113,7 +113,8 @@ class SchemaManager:
                 can_access_products BOOLEAN DEFAULT 0 NOT NULL CHECK(can_access_products IN (0, 1)),
                 can_access_fabrics BOOLEAN DEFAULT 0 NOT NULL CHECK(can_access_fabrics IN (0, 1)),
                 can_access_customer_panel BOOLEAN DEFAULT 0 NOT NULL CHECK(can_access_customer_panel IN (0, 1)),
-                can_access_fiscal BOOLEAN DEFAULT 0 NOT NULL CHECK(can_access_fiscal IN (0, 1)), -- <<<--- ADDED
+                can_access_fiscal BOOLEAN DEFAULT 0 NOT NULL CHECK(can_access_fiscal IN (0, 1)),
+                can_access_accounts_receivable BOOLEAN DEFAULT 0 NOT NULL CHECK(can_access_accounts_receivable IN (0, 1)), -- <<<--- ADDED
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             );
             """)
@@ -153,8 +154,10 @@ class SchemaManager:
     def _run_migrations(self, conn: sqlite3.Connection):
         """Applies necessary schema alterations (migrations)."""
         logger.debug("Running schema migrations...")
-        # Add the new fiscal permission column if it doesn't exist
+        # Add the new permission column if it doesn't exist
+        self._add_column_if_not_exists(conn, 'user_permissions', 'can_access_customer_panel', 'BOOLEAN DEFAULT 0 NOT NULL CHECK(can_access_customer_panel IN (0, 1))')
         self._add_column_if_not_exists(conn, 'user_permissions', 'can_access_fiscal', 'BOOLEAN DEFAULT 0 NOT NULL CHECK(can_access_fiscal IN (0, 1))')
+        self._add_column_if_not_exists(conn, 'user_permissions', 'can_access_accounts_receivable', 'BOOLEAN DEFAULT 0 NOT NULL CHECK(can_access_accounts_receivable IN (0, 1))') # <<<--- ADDED
         # Add more migration calls here as needed
         logger.debug("Schema migrations checked/applied.")
 
@@ -209,8 +212,8 @@ class SchemaManager:
                 # Insert permissions (ensure table exists first - handled by _create_tables)
                 cursor.execute("""
                     INSERT INTO user_permissions
-                    (user_id, is_admin, can_access_products, can_access_fabrics, can_access_customer_panel, can_access_fiscal)
-                    VALUES (?, 1, 1, 1, 1, 1) -- Admin gets all permissions
+                    (user_id, is_admin, can_access_products, can_access_fabrics, can_access_customer_panel, can_access_fiscal, can_access_accounts_receivable) -- <<<--- ADDED Column Name
+                    VALUES (?, 1, 1, 1, 1, 1, 1) -- Admin gets all permissions -- <<<--- ADDED Value
                 """, (admin_id,))
                 logger.info(f"Default admin user created successfully with full permissions (Password: '{'******' if password else 'N/A'}'). Please change the password if default was used.")
             else:
@@ -224,7 +227,8 @@ class SchemaManager:
                         can_access_products = 1,
                         can_access_fabrics = 1,
                         can_access_customer_panel = 1,
-                        can_access_fiscal = 1
+                        can_access_fiscal = 1,
+                        can_access_accounts_receivable = 1 -- <<<--- ADDED
                     WHERE user_id = ?
                 """, (admin_id,))
                 if cursor.rowcount > 0:
@@ -237,8 +241,8 @@ class SchemaManager:
                           logger.warning(f"Admin user ID {admin_id} exists, but no permissions row found. Creating.")
                           cursor.execute("""
                                INSERT INTO user_permissions
-                               (user_id, is_admin, can_access_products, can_access_fabrics, can_access_customer_panel, can_access_fiscal)
-                               VALUES (?, 1, 1, 1, 1, 1)
+                               (user_id, is_admin, can_access_products, can_access_fabrics, can_access_customer_panel, can_access_fiscal, can_access_accounts_receivable)
+                               VALUES (?, 1, 1, 1, 1, 1, 1)
                           """, (admin_id,))
                      else:
                           logger.debug(f"Admin user ID {admin_id} permissions already up-to-date.")

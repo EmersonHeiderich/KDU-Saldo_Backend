@@ -108,7 +108,12 @@ customer_panel_access_required = _permission_required(
     'Access to customer panel required.'
 )
 
-fiscal_access_required = _permission_required( # <<<--- ADDED
+fiscal_access_required = _permission_required(
     'can_access_fiscal',
     'Access to fiscal module required.'
+)
+
+accounts_receivable_access_required = _permission_required( # <<<--- ADDED
+    'can_access_accounts_receivable',
+    'Access to accounts receivable module required.'
 )

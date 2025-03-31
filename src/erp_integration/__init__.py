@@ -6,7 +6,8 @@ from .erp_balance_service import ErpBalanceService
 from .erp_cost_service import ErpCostService
 from .erp_person_service import ErpPersonService
 from .erp_product_service import ErpProductService
-from .erp_fiscal_service import ErpFiscalService # Added Fiscal service
+from .erp_fiscal_service import ErpFiscalService
+from .erp_accounts_receivable_service import ErpAccountsReceivableService # Added Accounts Receivable service
 
 # Instantiate singleton for ERP Auth if desired, as it's likely stateless
 # and used by other ERP services.
@@ -22,5 +23,6 @@ __all__ = [
     "ErpCostService",
     "ErpPersonService",
     "ErpProductService",
-    "ErpFiscalService", # Added Fiscal service
+    "ErpFiscalService",
+    "ErpAccountsReceivableService", # Added to exports
 ]

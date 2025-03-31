@@ -8,6 +8,7 @@ from typing import Dict, Any, List, Optional, Tuple
 from src.erp_integration.erp_fiscal_service import ErpFiscalService, FISCAL_INVOICE_PAGE_SIZE
 from src.domain.fiscal import FormattedInvoiceListItem, InvoiceXmlOutDto, DanfeResponseModel
 from src.utils.logger import logger
+from src.utils.pdf_utils import decode_base64_to_bytes
 from src.api.errors import ErpIntegrationError, ServiceError, NotFoundError, ValidationError
 from src.config import config # Import config
 
@@ -276,10 +277,10 @@ class FiscalService:
 
             # 3. Decode Base64 to PDF bytes
             try:
-                pdf_bytes = base64.b64decode(pdf_base64, validate=True)
+                pdf_bytes = decode_base64_to_bytes(pdf_base64)
                 logger.info(f"Successfully generated and decoded DANFE PDF for access key ...{access_key[-6:]}.")
                 return pdf_bytes
-            except (base64.binascii.Error, ValueError) as decode_err:
+            except (ValueError, TypeError, RuntimeError) as decode_err:
                 logger.error(f"Failed to decode Base64 DANFE PDF: {decode_err}", exc_info=True)
                 raise ServiceError("Failed to decode the generated DANFE PDF.")
 

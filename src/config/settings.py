@@ -49,6 +49,10 @@ class Config:
     LEGAL_ENTITIES_ENDPOINT: str = field(default_factory=lambda: os.environ.get('LEGAL_ENTITIES_ENDPOINT', '/person/v2/legal-entities/search'))
     PERSON_STATS_ENDPOINT: str = field(default_factory=lambda: os.environ.get('PERSON_STATS_ENDPOINT', '/person/v2/person-statistics'))
     TOKEN_ENDPOINT: str = field(default_factory=lambda: os.environ.get('TOKEN_ENDPOINT', '/authorization/v2/token'))
+    # --- Accounts Receivable Endpoints ---
+    ACCOUNTS_RECEIVABLE_DOCUMENTS_ENDPOINT: str = field(default_factory=lambda: os.environ.get('ACCOUNTS_RECEIVABLE_DOCUMENTS_ENDPOINT', '/accounts-receivable/v2/documents/search'))
+    ACCOUNTS_RECEIVABLE_BANKSLIP_ENDPOINT: str = field(default_factory=lambda: os.environ.get('ACCOUNTS_RECEIVABLE_BANKSLIP_ENDPOINT', '/accounts-receivable/v2/bank-slip'))
+    ACCOUNTS_RECEIVABLE_PAYMENTLINK_ENDPOINT: str = field(default_factory=lambda: os.environ.get('ACCOUNTS_RECEIVABLE_PAYMENTLINK_ENDPOINT', '/accounts-receivable/v2/payment-link'))
     # --- Fiscal Endpoints ---
     # Renamed config keys for consistency (used in older version provided)
     FISCAL_INVOICES_ENDPOINT: str = field(default_factory=lambda: os.environ.get('FISCAL_INVOICES_ENDPOINT', '/fiscal/v2/invoices/search'))
@@ -102,6 +106,8 @@ def load_config() -> Config:
         print(f"  API_USERNAME: {'*' * len(_config_instance.API_USERNAME) if _config_instance.API_USERNAME else 'Not Set'}")
         print(f"  COMPANY_CODE: {_config_instance.COMPANY_CODE}")
         print(f"  PAGE_SIZE (General): {_config_instance.PAGE_SIZE}")
+        print(f"  ACCOUNTS_RECEIVABLE_DOCUMENTS_ENDPOINT: {_config_instance.ACCOUNTS_RECEIVABLE_DOCUMENTS_ENDPOINT}")
+        print(f"  ACCOUNTS_RECEIVABLE_BANKSLIP_ENDPOINT: {_config_instance.ACCOUNTS_RECEIVABLE_BANKSLIP_ENDPOINT}")
         print(f"  FISCAL_PAGE_SIZE: {_config_instance.FISCAL_PAGE_SIZE}") # Log new setting
         print(f"  FISCAL_INVOICES_ENDPOINT: {_config_instance.FISCAL_INVOICES_ENDPOINT}")
         print(f"  FISCAL_XML_ENDPOINT: {_config_instance.FISCAL_XML_ENDPOINT}")

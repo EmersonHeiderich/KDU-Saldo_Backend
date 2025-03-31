@@ -4,9 +4,11 @@ Este diretório contém os modelos de dados da aplicação, também conhecidos c
 
 ## Arquivos
 
+*   **`accounts_receivable.py`**: Define modelos para dados de Contas a Receber do ERP (ex: `DocumentModel`, `BankSlipRequestModel`, `FormattedReceivableListItem`).
 *   **`balance.py`**: Define `Balance`, `ProductItem`, `ProductResponse` para dados de saldo do ERP.
 *   **`cost.py`**: Define `Cost`, `ProductCost`, `CostResponse` para dados de custo do ERP.
 *   **`fabric_details.py`**: Define `FabricDetailValue`, `FabricDetailsItem` para detalhes específicos de tecidos (largura, gramatura, etc.) do ERP.
+*   **`fiscal.py`**: Define modelos para operações do módulo Fiscal (ex: `FormattedInvoiceListItem`, `InvoiceXmlOutDto`, `DanfeResponseModel`).
 *   **`observation.py`**: Define `Observation` para os dados de observações de produto armazenados localmente.
 *   **`person.py`**: Define `Address`, `Phone`, `Email`, `IndividualDataModel`, `LegalEntityDataModel`, `PersonStatisticsResponseModel` para dados de pessoa (PF/PJ) do ERP.
 *   **`user.py`**: Define `User` e `UserPermissions` para os usuários da aplicação e suas permissões.
