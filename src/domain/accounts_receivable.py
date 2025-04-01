@@ -196,7 +196,7 @@ class DocumentModel:
     def from_dict(cls, data: Optional[Dict[str, Any]]) -> Optional['DocumentModel']:
         if not data: return None
 
-        calculated_values = CalculatedValuesModel.from_dict(data.get('calculatedValues'))
+        calculated_values = CalculatedValuesModel.from_dict(data.get('calculateValue'))
         invoices_raw = data.get('invoice', [])
         invoices = [InvoiceDataModel.from_dict(inv) for inv in invoices_raw if inv] if isinstance(invoices_raw, list) else []
         invoices = [inv for inv in invoices if inv is not None] # Filter out Nones

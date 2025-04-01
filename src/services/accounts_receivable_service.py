@@ -221,15 +221,15 @@ class AccountsReceivableService:
         use_calculated_for_current = is_overdue and calc_vals is not None
 
         if use_calculated_for_current:
-            # *** Use calculatedValues for Open and Overdue titles ***
-            logger.debug(f"Doc {doc.receivable_code}/{doc.installment_code}: Using calculatedValues (Currently Overdue)")
+            # *** Use calculateValue for Open and Overdue titles ***
+            logger.debug(f"Doc {doc.receivable_code}/{doc.installment_code}: Using calculateValue (Currently Overdue)")
             days_late = calc_vals.days_late
             value_corrected = calc_vals.corrected_value
-            # Combine increase/interest/fine from calculatedValues
+            # Combine increase/interest/fine from calculateValue
             increase = (calc_vals.increase_value or 0.0) + \
                        (calc_vals.interest_value or 0.0) + \
                        (calc_vals.fine_value or 0.0)
-            # Use discount from calculatedValues context
+            # Use discount from calculateValue context
             rebate = (calc_vals.discount_value or 0.0)
 
         else:
@@ -285,9 +285,9 @@ class AccountsReceivableService:
              logger.warning(f"Adjusting page size from {page_size} to 100 (API limit).")
              page_size = 100
 
-        # Always expand calculatedValues and invoice for the required fields
+        # Always expand calculateValue and invoice for the required fields
         expand_list = set(item.strip() for item in expand.split(',') if item.strip()) if expand else set()
-        expand_list.add("calculatedValues")
+        expand_list.add("calculateValue")
         expand_list.add("invoice")
         final_expand_str = ",".join(sorted(list(expand_list)))
 
