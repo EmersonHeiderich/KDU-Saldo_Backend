@@ -177,8 +177,8 @@ class DocumentModel:
     net_value: Optional[float] = None
     discount_value: Optional[float] = None
     rebate_value: Optional[float] = None
-    interest_value: Optional[float] = None # Note: distinct from calculatedValues.interestValue? Check API use.
-    assessment_value: Optional[float] = None # Note: distinct from calculatedValues.fineValue? Check API use.
+    interest_value: Optional[float] = None # Distinct from calculated_values.interest_value
+    assessment_value: Optional[float] = None # Distinct from calculated_values.fine_value
     bar_code: Optional[str] = None
     digitable_line: Optional[str] = None
     our_number: Optional[int] = None # API uses int64
@@ -196,7 +196,7 @@ class DocumentModel:
     def from_dict(cls, data: Optional[Dict[str, Any]]) -> Optional['DocumentModel']:
         if not data: return None
 
-        calculated_values = CalculatedValuesModel.from_dict(data.get('calculateValue'))
+        calculated_values = CalculatedValuesModel.from_dict(data.get('calculatedValues'))
         invoices_raw = data.get('invoice', [])
         invoices = [InvoiceDataModel.from_dict(inv) for inv in invoices_raw if inv] if isinstance(invoices_raw, list) else []
         invoices = [inv for inv in invoices if inv is not None] # Filter out Nones
