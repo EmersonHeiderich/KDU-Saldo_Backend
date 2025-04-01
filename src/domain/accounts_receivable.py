@@ -289,16 +289,21 @@ class BankSlipRequestModel:
     customer_code: int
     receivable_code: int # API int64
     installment_number: int
-    customer_cpf_cnpj: Optional[str] = None
+    customer_cpf_cnpj: Optional[str] = None # Keep this field in the model
 
     def to_dict(self) -> Dict[str, Any]:
         d = {
             "branchCode": self.branch_code,
-            "customerCode": self.customer_code,
+            "customerCode": self.customer_code, # Always include customerCode
             "receivableCode": self.receivable_code,
             "installmentNumber": self.installment_number,
         }
-        if self.customer_cpf_cnpj: d['customerCpfCnpj'] = self.customer_cpf_cnpj
+        # Only add customerCpfCnpj if customerCode is somehow missing (shouldn't happen with current validation)
+        # OR if the API strictly requires *only one*, then we never add CpfCnpj here.
+        # Let's enforce sending only customerCode as requested.
+        # if not self.customer_code and self.customer_cpf_cnpj:
+        #     d['customerCpfCnpj'] = self.customer_cpf_cnpj
+        # Since customerCode is required, we simply don't add customerCpfCnpj to the dict being sent to ERP.
         return d
 
 @dataclass(frozen=True)

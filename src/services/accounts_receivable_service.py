@@ -57,8 +57,8 @@ class AccountsReceivableService:
                 if value is not None:
                     if not isinstance(value, list) or not all(isinstance(x, int) for x in value):
                         raise ValidationError(f"Filter '{raw_key}' must be a list of integers.")
-                    if value: # Only add if not empty list
-                        filter_args[model_key] = value
+                    if value:
+                        filter_args[model_key] = value # *** USE model_key ***
 
             list_str_keys = {'customerCpfCnpjList': 'customer_cpf_cnpj_list'}
             for raw_key, model_key in list_str_keys.items():
@@ -66,8 +66,8 @@ class AccountsReceivableService:
                 if value is not None:
                     if not isinstance(value, list) or not all(isinstance(x, str) for x in value):
                         raise ValidationError(f"Filter '{raw_key}' must be a list of strings.")
-                    if value: # Only add if not empty list
-                        filter_args[model_key] = value
+                    if value:
+                        filter_args[model_key] = value # *** USE model_key ***
 
             list_float_keys = {'receivableCodeList': 'receivable_code_list', 'ourNumberList': 'our_number_list'}
             for raw_key, model_key in list_float_keys.items():
@@ -75,8 +75,8 @@ class AccountsReceivableService:
                 if value is not None:
                     if not isinstance(value, list) or not all(isinstance(x, (int, float)) for x in value):
                         raise ValidationError(f"Filter '{raw_key}' must be a list of numbers.")
-                    if value: # Only add if not empty list
-                        filter_args[model_key] = [float(x) for x in value]
+                    if value:
+                        filter_args[model_key] = [float(x) for x in value] # *** USE model_key ***
 
             # --- Parse Date Filters ---
             date_keys = {
@@ -90,7 +90,6 @@ class AccountsReceivableService:
                 value = raw_filters.get(raw_key)
                 if value is not None:
                     try:
-                        # Basic ISO validation
                         datetime.fromisoformat(str(value).replace('Z', '+00:00'))
                         filter_args[model_key] = str(value)
                     except (ValueError, TypeError):
@@ -100,10 +99,10 @@ class AccountsReceivableService:
             bool_keys = {'hasOpenInvoices': 'has_open_invoices'}
             for raw_key, model_key in bool_keys.items():
                 value = raw_filters.get(raw_key)
-                if value is not None: # Check specifically for None, allow False
+                if value is not None:
                     if not isinstance(value, bool):
                         raise ValidationError(f"Filter '{raw_key}' must be a boolean (true/false).")
-                    filter_args[model_key] = value
+                    filter_args[model_key] = value # *** USE model_key ***
 
             # --- Parse Simple Int/String Filters ---
             simple_int_keys = {
@@ -114,7 +113,7 @@ class AccountsReceivableService:
                  value = raw_filters.get(raw_key)
                  if value is not None:
                       if not isinstance(value, int): raise ValidationError(f"Filter '{raw_key}' must be an integer.")
-                      filter_args[model_key] = value
+                      filter_args[model_key] = value # *** USE model_key ***
 
             simple_str_keys = {
                 'commissionedCpfCnpj': 'commissioned_cpf_cnpj', 'closingCommissionedCpfCnpj': 'closing_commissioned_cpf_cnpj'
@@ -123,21 +122,19 @@ class AccountsReceivableService:
                  value = raw_filters.get(raw_key)
                  if value is not None:
                       if not isinstance(value, str): raise ValidationError(f"Filter '{raw_key}' must be a string.")
-                      filter_args[model_key] = value
+                      filter_args[model_key] = value # *** USE model_key ***
 
             # --- Parse 'change' Filter Object ---
             change_data = raw_filters.get('change')
             if change_data is not None:
                  if not isinstance(change_data, dict):
                      raise ValidationError("Filter 'change' must be an object.")
-                 # Add validation for dates within 'change' if needed
                  change_model = DocumentChangeModel.from_dict(change_data)
                  if change_model:
-                      filter_args['change'] = change_model
-
+                      filter_args['change'] = change_model # Use 'change' as key, as it matches the model attribute
 
             # --- Instantiate the frozen dataclass ONCE with all args ---
-            if not filter_args: # If no valid filters were found
+            if not filter_args:
                  return None
 
             parsed = DocumentFilterModel(**filter_args)
@@ -145,7 +142,7 @@ class AccountsReceivableService:
             return parsed
 
         except ValidationError:
-            raise # Re-raise validation errors
+            raise
         except Exception as e:
             logger.error(f"Error parsing filters: {e}", exc_info=True)
             raise ValidationError(f"Invalid filter format: {e}")
@@ -278,59 +275,119 @@ class AccountsReceivableService:
 
     def search_receivables(self, raw_filters: Optional[Dict[str, Any]], page: int, page_size: int, expand: Optional[str], order: Optional[str]) -> Dict[str, Any]:
         """
-        Searches for accounts receivable documents, enriches with customer names, and formats the results.
+        Searches for accounts receivable documents, enforces default branch filter,
+        enriches with customer names, and formats the results.
         """
         logger.info(f"Searching receivables. Page: {page}, Size: {page_size}, Filters: {raw_filters is not None}, Expand: {expand}, Order: {order}")
 
         if page < 1: page = 1
-        # Add ERP page size limit check if applicable (e.g., AR endpoint has limit of 100)
-        if page_size < 1 or page_size > 100: # Assuming 100 limit like fiscal
+        if page_size < 1 or page_size > 100:
              logger.warning(f"Adjusting page size from {page_size} to 100 (API limit).")
              page_size = 100
 
-        # Always expand calculatedValues for the required fields
+        # Always expand calculatedValues and invoice for the required fields
         expand_list = set(item.strip() for item in expand.split(',') if item.strip()) if expand else set()
         expand_list.add("calculatedValues")
-        # Add 'invoice' expand if needed for invoiceCode
         expand_list.add("invoice")
         final_expand_str = ",".join(sorted(list(expand_list)))
 
-
         try:
-            # 1. Parse and Validate Filters
-            parsed_filters = self._parse_and_validate_filters(raw_filters)
+            # 1. Parse and Validate User Filters
+            parsed_user_filters = self._parse_and_validate_filters(raw_filters)
 
-            # 2. Prepare ERP Request Payload
+            # 2. *** Ensure Branch Code Filter is Present ***
+            filter_for_request: DocumentFilterModel
+            default_branch = [config.COMPANY_CODE] # Use company code from config
+
+            if parsed_user_filters is None:
+                # No filters provided by user, create filter with only default branch
+                logger.debug("No user filters provided. Applying default branch filter.")
+                filter_for_request = DocumentFilterModel(branch_code_list=default_branch)
+            elif not parsed_user_filters.branch_code_list:
+                # User provided filters, but not branchCodeList. Add default branch.
+                logger.debug("User filters provided without branchCodeList. Adding default branch filter.")
+                # Since DocumentFilterModel is frozen, create a new one by merging
+                # Importante: to_dict() retorna chaves em camelCase (formato API), mas precisamos de snake_case para o modelo
+                filter_dict = parsed_user_filters.to_dict()
+                
+                # Convertendo de volta para snake_case para o DocumentFilterModel
+                filter_args = {}
+                date_keys_map = {
+                    'startExpiredDate': 'start_expired_date', 'endExpiredDate': 'end_expired_date',
+                    'startPaymentDate': 'start_payment_date', 'endPaymentDate': 'end_payment_date',
+                    'startIssueDate': 'start_issue_date', 'endIssueDate': 'end_issue_date',
+                    'startCreditDate': 'start_credit_date', 'endCreditDate': 'end_credit_date',
+                    'closingDateCommission': 'closing_date_commission'
+                }
+                int_list_keys_map = {
+                    'branchCodeList': 'branch_code_list', 'customerCodeList': 'customer_code_list',
+                    'statusList': 'status_list', 'documentTypeList': 'document_type_list',
+                    'billingTypeList': 'billing_type_list', 'dischargeTypeList': 'discharge_type_list',
+                    'chargeTypeList': 'charge_type_list'
+                }
+                str_list_keys_map = {'customerCpfCnpjList': 'customer_cpf_cnpj_list'}
+                float_list_keys_map = {'receivableCodeList': 'receivable_code_list', 'ourNumberList': 'our_number_list'}
+                bool_keys_map = {'hasOpenInvoices': 'has_open_invoices'}
+                simple_keys_map = {
+                    'commissionedCode': 'commissioned_code', 'closingCodeCommission': 'closing_code_commission',
+                    'closingCompanyCommission': 'closing_company_commission', 'closingCommissionedCode': 'closing_commissioned_code',
+                    'commissionedCpfCnpj': 'commissioned_cpf_cnpj', 'closingCommissionedCpfCnpj': 'closing_commissioned_cpf_cnpj'
+                }
+                
+                # Mapeando todas as chaves camelCase para snake_case
+                all_keys_map = {**date_keys_map, **int_list_keys_map, **str_list_keys_map, 
+                               **float_list_keys_map, **bool_keys_map, **simple_keys_map}
+                
+                for camel_key, snake_key in all_keys_map.items():
+                    if camel_key in filter_dict:
+                        filter_args[snake_key] = filter_dict[camel_key]
+                
+                # Tratar a chave 'change' separadamente, pois é um objeto
+                if 'change' in filter_dict:
+                    filter_args['change'] = DocumentChangeModel.from_dict(filter_dict['change'])
+                
+                # Adicionar branch_code_list
+                filter_args['branch_code_list'] = default_branch
+                
+                # Agora criamos o modelo com chaves corretas
+                filter_for_request = DocumentFilterModel(**filter_args)
+            else:
+                # User provided branchCodeList, use their filters directly
+                logger.debug("User provided branchCodeList in filters.")
+                filter_for_request = parsed_user_filters
+            # ********************************************
+
+            # 3. Prepare ERP Request Payload using the guaranteed filter
             request_payload = DocumentRequestModel(
-                filter=parsed_filters,
+                filter=filter_for_request, # Use the filter that now includes branchCodeList
                 expand=final_expand_str,
                 order=order,
                 page=page,
                 page_size=page_size
             )
 
-            # 3. Call ERP Service
+            # 4. Call ERP Service
             erp_response_dict = self.erp_ar_service.search_documents(request_payload.to_dict())
 
-            # 4. Parse ERP Response
+            # 5. Parse ERP Response
             erp_response = DocumentResponseModel.from_dict(erp_response_dict)
             if not erp_response:
                 raise ServiceError("Failed to parse ERP response for receivables search.")
 
-            # 5. Fetch Customer Names
+            # 6. Fetch Customer Names
             customer_names = self._fetch_customer_names(erp_response.items)
 
-            # 6. Format Results
+            # 7. Format Results
             formatted_items = [self._format_receivable_list_item(doc, customer_names) for doc in erp_response.items]
 
-            # 7. Construct Final API Response
+            # 8. Construct Final API Response
             result = {
                 "items": [item.to_dict() for item in formatted_items],
                 "page": page,
                 "pageSize": page_size,
                 "totalItems": erp_response.total_items,
                 "totalPages": erp_response.total_pages,
-                "hasNext": erp_response.has_next # Include hasNext from ERP response
+                "hasNext": erp_response.has_next
             }
             logger.info(f"Successfully fetched and formatted {len(formatted_items)} receivables for page {page}. Total: {erp_response.total_items}")
             return result
