@@ -1,19 +1,22 @@
 # src/database/schema_manager.py
-# Manages the creation and migration of the database schema.
+# Manages the creation and migration of the database schema using SQLAlchemy.
 
-import sqlite3
 import bcrypt
 import os
-from datetime import datetime
-from .connection_pool import ConnectionPool
-from src.utils.logger import logger
-from src.api.errors import DatabaseError, ConfigurationError # Added ConfigurationError
+from datetime import datetime, timezone
+from sqlalchemy.engine import Engine, Connection # Importar Engine e Connection
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError # Importar erros
+from sqlalchemy import text # Para executar SQL bruto
 
-# Attempt to import config for default admin password (handle potential failure)
-DEFAULT_ADMIN_PASSWORD = 'admin' # Fallback default
+# Importar ConnectionPool REMOVIDO
+from src.utils.logger import logger
+from src.api.errors import DatabaseError, ConfigurationError
+
+# Lógica para obter senha admin padrão permanece a mesma
+DEFAULT_ADMIN_PASSWORD = 'admin'
 try:
      from src.config import config
-     DEFAULT_ADMIN_PASSWORD = os.environ.get('DEFAULT_ADMIN_PASSWORD', config.SECRET_KEY[:8] if config.SECRET_KEY else 'admin') # Use env var or derived/fallback
+     DEFAULT_ADMIN_PASSWORD = os.environ.get('DEFAULT_ADMIN_PASSWORD', config.SECRET_KEY[:8] if config.SECRET_KEY else 'admin')
      if len(DEFAULT_ADMIN_PASSWORD) < 6:
           logger.warning("Default admin password is too short, using 'admin123' instead.")
           DEFAULT_ADMIN_PASSWORD = 'admin123'
@@ -23,235 +26,232 @@ except (ImportError, ConfigurationError) as e:
 
 class SchemaManager:
     """
-    Manages the database schema, including table creation, migrations,
-    and initial data setup (like the admin user).
+    Manages the database schema (PostgreSQL), including table creation, migrations,
+    and initial data setup using SQLAlchemy Engine.
     """
 
-    def __init__(self, connection_pool: ConnectionPool):
+    # Aceita Engine no construtor
+    def __init__(self, engine: Engine):
         """
         Initializes the SchemaManager.
 
         Args:
-            connection_pool: The ConnectionPool instance.
+            engine: The SQLAlchemy Engine instance.
         """
-        self.connection_pool = connection_pool
-        logger.debug("SchemaManager initialized.")
+        self.engine = engine
+        logger.debug("SchemaManager initialized with SQLAlchemy engine.")
 
     def initialize_schema(self):
         """
-        Initializes the database schema. Creates tables if they don't exist,
+        Initializes the PostgreSQL database schema. Creates tables if they don't exist,
         runs necessary migrations, and ensures essential initial data is present.
-
-        Should be called once during application startup.
-
-        Raises:
-            DatabaseError: If schema initialization fails.
         """
-        conn = None
+        # Obter conexão usando 'with' (gerencia begin/commit/rollback/close)
         try:
-            logger.info("Starting database schema initialization...")
-            conn = self.connection_pool.get_connection() # Use pool's get method
+            with self.engine.connect() as connection:
+                logger.info("Starting database schema initialization...")
+                # Iniciar transação explícita para múltiplas operações DDL/DML
+                with connection.begin():
+                    logger.debug("Transaction started for schema initialization.")
 
-            # Use Row factory for PRAGMA results
-            conn.row_factory = sqlite3.Row
+                    self._create_tables(connection)
+                    self._run_migrations(connection)
+                    self._ensure_admin_user_exists(connection)
 
-            # Start transaction
-            conn.execute("BEGIN;")
-            logger.debug("Transaction started for schema initialization.")
+                # Commit é automático ao sair do 'connection.begin()' sem erro
+                logger.info("Database schema initialization completed successfully.")
 
-            self._create_tables(conn)
-            self._run_migrations(conn)
-            self._ensure_admin_user_exists(conn)
-
-            # Commit transaction
-            conn.commit()
-            logger.info("Database schema initialization completed successfully.")
-
-        except Exception as e:
+        except SQLAlchemyError as e: # Captura erros SQLAlchemy (inclui IntegrityError)
+            # Rollback é automático ao sair do 'connection.begin()' com erro
             logger.critical(f"Database schema initialization failed: {e}", exc_info=True)
-            if conn:
-                try:
-                    logger.warning("Rolling back schema changes due to error.")
-                    conn.rollback()
-                except Exception as rb_err:
-                    logger.error(f"Error during schema rollback: {rb_err}", exc_info=True)
-            # Re-raise as a specific error type
             raise DatabaseError(f"Schema initialization failed: {e}") from e
-        finally:
-            if conn:
-                # Reset row factory before releasing if changed
-                conn.row_factory = sqlite3.Row # Ensure it's reset to expected default for pool
-                self.connection_pool.release_connection(conn) # Use pool's release method
+        except Exception as e:
+            # Captura outros erros inesperados
+            logger.critical(f"Unexpected error during schema initialization: {e}", exc_info=True)
+            raise DatabaseError(f"Schema initialization failed: {e}") from e
+        # A conexão é fechada automaticamente ao sair do 'engine.connect()'
 
-
-    def _create_tables(self, conn: sqlite3.Connection):
-        """Creates all necessary tables if they do not exist."""
-        logger.debug("Creating database tables if they don't exist...")
-        cursor = conn.cursor()
+    def _create_tables(self, connection: Connection): # Recebe Connection SQLAlchemy
+        """Creates all necessary tables if they do not exist using PostgreSQL syntax."""
+        logger.debug("Creating database tables (PostgreSQL) if they don't exist...")
         try:
             # Users Table
-            cursor.execute("""
+            # Usar SERIAL PRIMARY KEY ou INTEGER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY
+            # Usar TIMESTAMP WITH TIME ZONE (TIMESTAMPTZ)
+            # Remover COLLATE NOCASE
+            connection.execute(text("""
             CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT UNIQUE NOT NULL COLLATE NOCASE, -- Case-insensitive unique username
+                id SERIAL PRIMARY KEY,
+                username TEXT UNIQUE NOT NULL, -- Adicionar índice LOWER() depois se necessário
                 password_hash TEXT NOT NULL,
                 name TEXT NOT NULL,
-                email TEXT UNIQUE COLLATE NOCASE, -- Case-insensitive unique email
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-                last_login TIMESTAMP,
-                is_active BOOLEAN DEFAULT 1 NOT NULL CHECK(is_active IN (0, 1))
+                email TEXT UNIQUE, -- Adicionar índice LOWER() depois se necessário
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                last_login TIMESTAMP WITH TIME ZONE,
+                is_active BOOLEAN DEFAULT TRUE NOT NULL
             );
-            """)
+            """))
             logger.debug("Table 'users' checked/created.")
 
             # User Permissions Table
-            cursor.execute("""
+            # Usar BOOLEAN DEFAULT FALSE
+            # ON DELETE CASCADE é compatível
+            connection.execute(text("""
             CREATE TABLE IF NOT EXISTS user_permissions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL UNIQUE, -- One-to-one relationship with users
-                is_admin BOOLEAN DEFAULT 0 NOT NULL CHECK(is_admin IN (0, 1)),
-                can_access_products BOOLEAN DEFAULT 0 NOT NULL CHECK(can_access_products IN (0, 1)),
-                can_access_fabrics BOOLEAN DEFAULT 0 NOT NULL CHECK(can_access_fabrics IN (0, 1)),
-                can_access_customer_panel BOOLEAN DEFAULT 0 NOT NULL CHECK(can_access_customer_panel IN (0, 1)),
-                can_access_fiscal BOOLEAN DEFAULT 0 NOT NULL CHECK(can_access_fiscal IN (0, 1)),
-                can_access_accounts_receivable BOOLEAN DEFAULT 0 NOT NULL CHECK(can_access_accounts_receivable IN (0, 1)), -- <<<--- ADDED
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL UNIQUE,
+                is_admin BOOLEAN DEFAULT FALSE NOT NULL,
+                can_access_products BOOLEAN DEFAULT FALSE NOT NULL,
+                can_access_fabrics BOOLEAN DEFAULT FALSE NOT NULL,
+                can_access_customer_panel BOOLEAN DEFAULT FALSE NOT NULL,
+                can_access_fiscal BOOLEAN DEFAULT FALSE NOT NULL,
+                can_access_accounts_receivable BOOLEAN DEFAULT FALSE NOT NULL,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             );
-            """)
+            """))
             logger.debug("Table 'user_permissions' checked/created.")
 
             # Product Observations Table
-            cursor.execute("""
+            # Delimitar "user" com aspas duplas
+            connection.execute(text("""
             CREATE TABLE IF NOT EXISTS product_observations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 reference_code TEXT NOT NULL,
                 observation TEXT NOT NULL,
-                user TEXT NOT NULL,
-                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-                resolved BOOLEAN DEFAULT 0 NOT NULL CHECK(resolved IN (0, 1)),
+                "user" TEXT NOT NULL, -- Delimitado pois 'user' é palavra reservada
+                timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                resolved BOOLEAN DEFAULT FALSE NOT NULL,
                 resolved_user TEXT,
-                resolved_timestamp TIMESTAMP
+                resolved_timestamp TIMESTAMP WITH TIME ZONE
             );
-            """)
+            """))
             logger.debug("Table 'product_observations' checked/created.")
 
             # --- Indexes ---
-            logger.debug("Creating indexes...")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_permissions_user_id ON user_permissions(user_id);")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_product_observations_ref_code ON product_observations(reference_code);")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_product_observations_resolved_timestamp ON product_observations(resolved, timestamp);")
+            logger.debug("Creating indexes (PostgreSQL)...")
+            # Índices normais (para buscas exatas ou LIKE prefixo)
+            connection.execute(text("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);"))
+            # Índice para busca case-insensitive (opcional, mas recomendado para login/email unique)
+            connection.execute(text("CREATE INDEX IF NOT EXISTS idx_users_username_lower ON users(LOWER(username));"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS idx_users_email_lower ON users(LOWER(email));"))
+            # Outros índices
+            connection.execute(text("CREATE INDEX IF NOT EXISTS idx_user_permissions_user_id ON user_permissions(user_id);"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS idx_product_observations_ref_code ON product_observations(reference_code);"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS idx_product_observations_resolved_timestamp ON product_observations(resolved, timestamp);"))
             logger.debug("Indexes checked/created.")
 
-        except sqlite3.Error as e:
+        except SQLAlchemyError as e:
             logger.error(f"Error creating tables: {e}", exc_info=True)
-            raise # Propagate error to trigger rollback
-        finally:
-             if cursor: cursor.close()
+            raise # Propaga erro para causar rollback da transação
 
-
-    def _run_migrations(self, conn: sqlite3.Connection):
-        """Applies necessary schema alterations (migrations)."""
-        logger.debug("Running schema migrations...")
-        # Add the new permission column if it doesn't exist
-        self._add_column_if_not_exists(conn, 'user_permissions', 'can_access_customer_panel', 'BOOLEAN DEFAULT 0 NOT NULL CHECK(can_access_customer_panel IN (0, 1))')
-        self._add_column_if_not_exists(conn, 'user_permissions', 'can_access_fiscal', 'BOOLEAN DEFAULT 0 NOT NULL CHECK(can_access_fiscal IN (0, 1))')
-        self._add_column_if_not_exists(conn, 'user_permissions', 'can_access_accounts_receivable', 'BOOLEAN DEFAULT 0 NOT NULL CHECK(can_access_accounts_receivable IN (0, 1))') # <<<--- ADDED
-        # Add more migration calls here as needed
+    def _run_migrations(self, connection: Connection):
+        """Applies necessary schema alterations (migrations) using PostgreSQL syntax."""
+        logger.debug("Running schema migrations (PostgreSQL)...")
+        # Usa ALTER TABLE ... ADD COLUMN IF NOT EXISTS (Postgres 9.6+)
+        self._add_column_if_not_exists(connection, 'user_permissions', 'can_access_customer_panel', 'BOOLEAN DEFAULT FALSE NOT NULL')
+        self._add_column_if_not_exists(connection, 'user_permissions', 'can_access_fiscal', 'BOOLEAN DEFAULT FALSE NOT NULL')
+        self._add_column_if_not_exists(connection, 'user_permissions', 'can_access_accounts_receivable', 'BOOLEAN DEFAULT FALSE NOT NULL')
+        # Adicionar futuras migrações aqui
         logger.debug("Schema migrations checked/applied.")
 
-
-    def _add_column_if_not_exists(self, conn: sqlite3.Connection, table_name: str, column_name: str, column_definition: str):
-        """Helper function to add a column to a table if it doesn't already exist."""
-        cursor = conn.cursor()
+    def _add_column_if_not_exists(self, connection: Connection, table_name: str, column_name: str, column_definition: str):
+        """Helper function to add a column using ADD COLUMN IF NOT EXISTS (Postgres 9.6+)."""
         try:
-            # Use PRAGMA table_info which works well with sqlite3.Row factory
-            cursor.execute(f"PRAGMA table_info({table_name})")
-            columns = [row['name'] for row in cursor.fetchall()]
+            # Sintaxe simplificada para Postgres 9.6+
+            alter_query = f"ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS {column_name} {column_definition}"
+            logger.debug(f"Executing migration: {alter_query}")
+            connection.execute(text(alter_query))
+            # Como IF NOT EXISTS foi usado, não sabemos se foi adicionado ou já existia,
+            # mas o estado final está correto. Log pode ser ajustado se precisar saber.
+            logger.debug(f"Column '{column_name}' ensured in table '{table_name}'.")
 
-            if column_name not in columns:
-                logger.info(f"Adding column '{column_name}' to table '{table_name}'...")
-                alter_query = f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_definition}"
-                cursor.execute(alter_query)
-                logger.info(f"Column '{column_name}' added successfully.")
-            else:
-                logger.debug(f"Column '{column_name}' already exists in table '{table_name}'.")
-
-        except sqlite3.Error as e:
+        except SQLAlchemyError as e:
             logger.error(f"Error adding column '{column_name}' to table '{table_name}': {e}", exc_info=True)
-            raise # Reraise to indicate migration failure
-        finally:
-             if cursor: cursor.close()
+            raise # Reraise para indicar falha na migração
 
-    def _ensure_admin_user_exists(self, conn: sqlite3.Connection):
-        """Checks for the default admin user and creates it if missing."""
-        logger.debug("Ensuring default admin user exists...")
-        cursor = conn.cursor()
+
+    def _ensure_admin_user_exists(self, connection: Connection):
+        """Checks for the default admin user and creates it if missing using PostgreSQL syntax."""
+        logger.debug("Ensuring default admin user exists (PostgreSQL)...")
         try:
-            cursor.execute("SELECT id FROM users WHERE username = ?", ('admin',))
-            admin_exists = cursor.fetchone()
+            # Verificar se admin existe (busca case-insensitive recomendada)
+            check_query = "SELECT id FROM users WHERE LOWER(username) = LOWER(:username)"
+            check_params = {'username': 'admin'}
+            result = connection.execute(text(check_query), check_params)
+            admin_exists = result.fetchone() # Pega a primeira linha ou None
 
             if not admin_exists:
                 logger.info("Default admin user not found. Creating...")
 
-                password = DEFAULT_ADMIN_PASSWORD # Use the resolved password
+                password = DEFAULT_ADMIN_PASSWORD
                 hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-                now = datetime.now()
+                now = datetime.now(timezone.utc) # Usar UTC para TIMESTAMPTZ
 
-                # Insert user
-                cursor.execute("""
+                # Inserir usuário com RETURNING id
+                user_insert_query = """
                     INSERT INTO users (username, password_hash, name, email, created_at, is_active)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                """, ('admin', hashed_password, 'Administrator', 'admin@example.com', now, 1))
-                admin_id = cursor.lastrowid
-                logger.debug(f"Admin user created with ID: {admin_id}")
-                if not admin_id:
-                     raise DatabaseError("Failed to create admin user, lastrowid is null.")
+                    VALUES (:username, :password_hash, :name, :email, :created_at, :is_active)
+                    RETURNING id
+                """
+                user_insert_params = {
+                    'username': 'admin', 'password_hash': hashed_password, 'name': 'Administrator',
+                    'email': 'admin@example.com', 'created_at': now, 'is_active': True
+                }
+                user_result = connection.execute(text(user_insert_query), user_insert_params)
+                admin_id = user_result.scalar_one_or_none() # Pega o ID retornado
 
-                # Insert permissions (ensure table exists first - handled by _create_tables)
-                cursor.execute("""
+                if not admin_id:
+                     raise DatabaseError("Failed to create admin user, RETURNING id yielded no result.")
+                logger.debug(f"Admin user created with ID: {admin_id}")
+
+                # Inserir permissões (admin tem tudo TRUE)
+                perm_insert_query = """
                     INSERT INTO user_permissions
-                    (user_id, is_admin, can_access_products, can_access_fabrics, can_access_customer_panel, can_access_fiscal, can_access_accounts_receivable) -- <<<--- ADDED Column Name
-                    VALUES (?, 1, 1, 1, 1, 1, 1) -- Admin gets all permissions -- <<<--- ADDED Value
-                """, (admin_id,))
+                    (user_id, is_admin, can_access_products, can_access_fabrics, can_access_customer_panel, can_access_fiscal, can_access_accounts_receivable)
+                    VALUES (:user_id, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE)
+                """
+                perm_insert_params = {'user_id': admin_id}
+                connection.execute(text(perm_insert_query), perm_insert_params)
                 logger.info(f"Default admin user created successfully with full permissions (Password: '{'******' if password else 'N/A'}'). Please change the password if default was used.")
             else:
                 logger.debug("Default admin user already exists.")
-                # Optionally: Update admin permissions if needed on startup?
-                admin_id = admin_exists['id']
+                # Opcional: Atualizar permissões do admin existente para garantir que tenha tudo
+                admin_id = admin_exists[0] # admin_exists é uma Row, acessar por índice
                 logger.debug(f"Ensuring admin user (ID: {admin_id}) has all permissions...")
-                cursor.execute("""
+                perm_update_query = """
                     UPDATE user_permissions SET
-                        is_admin = 1,
-                        can_access_products = 1,
-                        can_access_fabrics = 1,
-                        can_access_customer_panel = 1,
-                        can_access_fiscal = 1,
-                        can_access_accounts_receivable = 1 -- <<<--- ADDED
-                    WHERE user_id = ?
-                """, (admin_id,))
-                if cursor.rowcount > 0:
-                     logger.info(f"Updated permissions for admin user ID {admin_id}.")
-                else:
-                     # Check if permissions row exists at all
-                     cursor.execute("SELECT 1 FROM user_permissions WHERE user_id = ?", (admin_id,))
-                     perm_exists = cursor.fetchone()
+                        is_admin = TRUE,
+                        can_access_products = TRUE,
+                        can_access_fabrics = TRUE,
+                        can_access_customer_panel = TRUE,
+                        can_access_fiscal = TRUE,
+                        can_access_accounts_receivable = TRUE
+                    WHERE user_id = :user_id
+                """
+                perm_update_params = {'user_id': admin_id}
+                update_result = connection.execute(text(perm_update_query), perm_update_params)
+
+                # Verificar se a linha de permissão existia (se rowcount for 0, pode não existir)
+                if update_result.rowcount == 0:
+                     perm_check_query = "SELECT 1 FROM user_permissions WHERE user_id = :user_id"
+                     perm_exists = connection.execute(text(perm_check_query), {'user_id': admin_id}).scalar_one_or_none()
                      if not perm_exists:
                           logger.warning(f"Admin user ID {admin_id} exists, but no permissions row found. Creating.")
-                          cursor.execute("""
+                          perm_insert_query = """
                                INSERT INTO user_permissions
                                (user_id, is_admin, can_access_products, can_access_fabrics, can_access_customer_panel, can_access_fiscal, can_access_accounts_receivable)
-                               VALUES (?, 1, 1, 1, 1, 1, 1)
-                          """, (admin_id,))
+                               VALUES (:user_id, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE)
+                          """
+                          connection.execute(text(perm_insert_query), {'user_id': admin_id})
                      else:
-                          logger.debug(f"Admin user ID {admin_id} permissions already up-to-date.")
+                          logger.debug(f"Admin user ID {admin_id} permissions already up-to-date (rowcount 0 on update).")
+                else:
+                     logger.info(f"Updated permissions for admin user ID {admin_id}.")
 
 
-        except sqlite3.IntegrityError as e:
+        except IntegrityError as e: # Captura erros de constraint UNIQUE etc.
             logger.warning(f"Admin user creation failed due to integrity constraint (likely exists): {e}")
-        except sqlite3.Error as e:
+        except SQLAlchemyError as e:
             logger.error(f"Error ensuring admin user exists: {e}", exc_info=True)
-            raise # Propagate error
-        finally:
-            if cursor: cursor.close()
+            raise # Propaga erro para rollback da transação

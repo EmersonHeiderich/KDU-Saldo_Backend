@@ -1,64 +1,67 @@
 # src/database/user_repository.py
-# Handles database operations related to Users and UserPermissions.
+# Handles database operations related to Users and UserPermissions using SQLAlchemy.
 
-import sqlite3
-from datetime import datetime
+import sqlite3 # Manter temporariamente para capturar sqlite3.IntegrityError se ocorrer transição
+from datetime import timezone, datetime
 from typing import List, Optional, Dict, Any
+from sqlalchemy import text
+from sqlalchemy.engine import Engine # Importar Engine
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError # Importar erros SQLAlchemy
+
+# Importar BaseRepository atualizado
 from .base_repository import BaseRepository
-from .connection_pool import ConnectionPool
 from src.domain.user import User, UserPermissions
 from src.utils.logger import logger
-from src.api.errors import DatabaseError, NotFoundError
+# Importar DatabaseError (NotFound não é mais lançado daqui)
+from src.api.errors import DatabaseError, ValidationError
 
 class UserRepository(BaseRepository):
     """
-    Repository for managing User and UserPermissions data in the database.
+    Repository for managing User and UserPermissions data using SQLAlchemy.
     """
 
-    def __init__(self, connection_pool: ConnectionPool):
-        super().__init__(connection_pool)
-        logger.info("UserRepository initialized.")
+    # Aceita Engine no construtor
+    def __init__(self, engine: Engine):
+        super().__init__(engine)
+        logger.info("UserRepository initialized with SQLAlchemy engine.")
 
     def _map_row_to_user(self, row: Optional[Dict[str, Any]]) -> Optional[User]:
         """Helper to map a database row (dict) to a User object."""
+        # Esta função deve funcionar majoritariamente como antes,
+        # pois SQLAlchemy RowMapping se comporta como dict.
         if not row:
             return None
 
-        # Pop permission fields to create UserPermissions object separately
+        # Adapte nomes das colunas se mudaram (ex: permission_id)
         permission_data = {
-            'id': row.pop('permission_id', None),
-            'user_id': row.get('id'), # Use user's ID
-            'is_admin': row.pop('is_admin', 0),
-            'can_access_products': row.pop('can_access_products', 0),
-            'can_access_fabrics': row.pop('can_access_fabrics', 0),
-            'can_access_customer_panel': row.pop('can_access_customer_panel', 0),
-            'can_access_fiscal': row.pop('can_access_fiscal', 0),
-            'can_access_accounts_receivable': row.pop('can_access_accounts_receivable', 0) # <<<--- ADDED
+            'id': row.get('permission_id'), # Usar .get() para segurança
+            'user_id': row.get('id'),
+            'is_admin': row.get('is_admin', False), # Default para False se ausente
+            'can_access_products': row.get('can_access_products', False),
+            'can_access_fabrics': row.get('can_access_fabrics', False),
+            'can_access_customer_panel': row.get('can_access_customer_panel', False),
+            'can_access_fiscal': row.get('can_access_fiscal', False),
+            'can_access_accounts_receivable': row.get('can_access_accounts_receivable', False)
         }
-        # Remaining fields are for the User object
-        user_data = row
-        user_data['permissions'] = permission_data # Nest permission dict for User.from_dict
+        # Remover chaves de permissão do dict principal 'row'
+        perm_keys_in_row = ['permission_id', 'is_admin', 'can_access_products', 'can_access_fabrics',
+                            'can_access_customer_panel', 'can_access_fiscal', 'can_access_accounts_receivable']
+        user_data = {k: v for k, v in row.items() if k not in perm_keys_in_row}
 
-        user = User.from_dict(user_data)
+        # Adicionar dados de permissão ao dict do usuário
+        user_data['permissions'] = permission_data
+
+        user = User.from_dict(user_data) # Assume que User.from_dict pode lidar com isso
         if not user:
-             logger.error(f"Failed to map row to User object. Row data: {row}") # Log original row data
-             return None # Handle potential errors in User.from_dict
+             logger.error(f"Failed to map row to User object. Row data: {row}")
+             return None
 
-        # Ensure permissions object is correctly formed even if no permission row existed (LEFT JOIN)
+        # Assegurar objeto de permissões (caso LEFT JOIN não encontre correspondência)
         if user and not user.permissions:
-             logger.debug(f"No permission row found for user ID {user.id}, creating default permissions object.")
-             # Create default permissions ensuring fiscal is False
-             user.permissions = UserPermissions(
-                  user_id=user.id,
-                  is_admin=False,
-                  can_access_products=False,
-                  can_access_fabrics=False,
-                  can_access_customer_panel=False,
-                  can_access_fiscal=False,
-                  can_access_accounts_receivable=False
-             )
+            logger.debug(f"No permission row found for user ID {user.id}, creating default permissions object.")
+            user.permissions = UserPermissions(user_id=user.id) # Cria default
         elif user and user.permissions and user.permissions.user_id is None:
-             # Set user_id if User.from_dict didn't get it from the base row
+             # Define user_id se não veio da linha base
              user.permissions.user_id = user.id
 
         return user
@@ -66,60 +69,60 @@ class UserRepository(BaseRepository):
 
     def find_by_username(self, username: str) -> Optional[User]:
         """
-        Finds an active user by their username (case-insensitive).
-
-        Args:
-            username: The username to search for.
-
-        Returns:
-            A User object if found and active, otherwise None.
+        Finds an active user by their username (case-insensitive - handled by DB if configured, otherwise use LOWER).
         """
-        # COLLATE NOCASE in CREATE TABLE handles case-insensitivity at DB level
+        # CORRIGIR O PLACEHOLDER NA QUERY SQL AQUI
         query = """
-            SELECT u.*, p.id as permission_id, p.is_admin, p.can_access_products,
-                   p.can_access_fabrics, p.can_access_customer_panel, p.can_access_fiscal, p.can_access_accounts_receivable -- <<<--- ADDED
+            SELECT u.*,
+                   p.id as permission_id, p.is_admin, p.can_access_products,
+                   p.can_access_fabrics, p.can_access_customer_panel, p.can_access_fiscal,
+                   p.can_access_accounts_receivable
             FROM users u
             LEFT JOIN user_permissions p ON u.id = p.user_id
-            WHERE u.username = ? AND u.is_active = 1
+            WHERE LOWER(u.username) = LOWER(:username) AND u.is_active = TRUE -- Usando LOWER() e :username
         """
+        # Params já está correto como dicionário
+        params = {'username': username}
         try:
-            row = self._execute(query, (username,), fetch_mode="one")
+            # Chama _execute do BaseRepository atualizado
+            row = self._execute(query, params=params, fetch_mode="one")
             user = self._map_row_to_user(row)
+            # Logging adaptado
             if user:
                  logger.debug(f"User found by username '{username}': ID {user.id}")
             else:
                  logger.debug(f"Active user not found by username '{username}'.")
             return user
+        # TRATAMENTO DE ERRO PERMANECE O MESMO
         except DatabaseError as e:
              logger.error(f"Database error finding user by username '{username}': {e}", exc_info=True)
+             # É importante retornar None aqui para que AuthService lance o AuthenticationError correto
              return None
         except Exception as e:
              logger.error(f"Unexpected error finding user by username '{username}': {e}", exc_info=True)
              return None
 
     def find_by_id(self, user_id: int) -> Optional[User]:
-        """
-        Finds a user by their ID (regardless of active status).
-
-        Args:
-            user_id: The ID of the user.
-
-        Returns:
-            A User object if found, otherwise None.
-        """
+        """Finds a user by their ID (regardless of active status)."""
+        # CORRIGIR O PLACEHOLDER NA QUERY SQL AQUI
         query = """
-            SELECT u.*, p.id as permission_id, p.is_admin, p.can_access_products,
-                   p.can_access_fabrics, p.can_access_customer_panel, p.can_access_fiscal, p.can_access_accounts_receivable  -- <<<--- ADDED
+            SELECT u.*,
+                   p.id as permission_id, p.is_admin, p.can_access_products,
+                   p.can_access_fabrics, p.can_access_customer_panel, p.can_access_fiscal,
+                   p.can_access_accounts_receivable
             FROM users u
             LEFT JOIN user_permissions p ON u.id = p.user_id
-            WHERE u.id = ?
+            WHERE u.id = :user_id -- Usando :user_id
         """
+        # Params já está correto como dicionário
+        params = {'user_id': user_id}
         try:
-            row = self._execute(query, (user_id,), fetch_mode="one")
+            row = self._execute(query, params=params, fetch_mode="one")
             user = self._map_row_to_user(row)
             if user:
                  logger.debug(f"User found by ID {user_id}.")
             else:
+                 # Este log pode acontecer se o ID for inválido, não necessariamente um erro
                  logger.debug(f"User not found by ID {user_id}.")
             return user
         except DatabaseError as e:
@@ -130,48 +133,32 @@ class UserRepository(BaseRepository):
              return None
 
     def get_all(self) -> List[User]:
-        """
-        Retrieves all users from the database.
-
-        Returns:
-            A list of User objects.
-        """
+        """Retrieves all users from the database."""
         query = """
-            SELECT u.*, p.id as permission_id, p.is_admin, p.can_access_products,
-                   p.can_access_fabrics, p.can_access_customer_panel, p.can_access_fiscal, p.can_access_accounts_receivable -- <<<--- ADDED
+            SELECT u.*,
+                   p.id as permission_id, p.is_admin, p.can_access_products,
+                   p.can_access_fabrics, p.can_access_customer_panel, p.can_access_fiscal,
+                   p.can_access_accounts_receivable
             FROM users u
             LEFT JOIN user_permissions p ON u.id = p.user_id
             ORDER BY u.username
         """
         try:
-            rows = self._execute(query, fetch_mode="all")
+            rows = self._execute(query, fetch_mode="all") # Sem params aqui
             users = [self._map_row_to_user(row) for row in rows]
-            # Filter out None results from potential mapping errors
             users = [user for user in users if user is not None]
             logger.debug(f"Retrieved {len(users)} users from database.")
             return users
         except DatabaseError as e:
              logger.error(f"Database error retrieving all users: {e}", exc_info=True)
-             return [] # Return empty list on error
+             return []
         except Exception as e:
              logger.error(f"Unexpected error retrieving all users: {e}", exc_info=True)
              return []
 
 
     def add(self, user: User) -> User:
-        """
-        Adds a new user and their permissions to the database.
-
-        Args:
-            user: A User object (ID should be None).
-
-        Returns:
-            The User object with the generated ID.
-
-        Raises:
-            DatabaseError: If the insertion fails.
-            ValueError: If required user fields are missing or permissions are not set.
-        """
+        """Adds a new user and their permissions within a single transaction."""
         if not user.username or not user.password_hash or not user.name:
              raise ValueError("Missing required fields (username, password_hash, name) for User.")
         if user.permissions is None:
@@ -179,222 +166,251 @@ class UserRepository(BaseRepository):
 
         user_query = """
             INSERT INTO users (username, password_hash, name, email, created_at, is_active)
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (:username, :password_hash, :name, :email, :created_at, :is_active)
+            RETURNING id
         """
-        user_params = (
-            user.username, user.password_hash, user.name, user.email,
-            user.created_at or datetime.now(), user.is_active
-        )
+        user_params = {
+            'username': user.username,
+            'password_hash': user.password_hash,
+            'name': user.name,
+            'email': user.email,
+            'created_at': user.created_at or datetime.now(timezone.utc), # Usar UTC se a coluna for TIMESTAMPTZ
+            'is_active': user.is_active
+        }
 
         perm_query = """
             INSERT INTO user_permissions
-            (user_id, is_admin, can_access_products, can_access_fabrics, can_access_customer_panel, can_access_fiscal, can_access_accounts_receivable) -- <<<--- ADDED
-            VALUES (?, ?, ?, ?, ?, ?, ?) -- <<<--- ADDED Placeholder
+            (user_id, is_admin, can_access_products, can_access_fabrics, can_access_customer_panel, can_access_fiscal, can_access_accounts_receivable)
+            VALUES (:user_id, :is_admin, :can_access_products, :can_access_fabrics, :can_access_customer_panel, :can_access_fiscal, :can_access_accounts_receivable)
+            RETURNING id
         """
+        # Perm params definidos depois de obter user_id
 
-        conn = None
         try:
-            conn = self._get_connection()
-            conn.execute("BEGIN;") # Explicit transaction
-            cursor = conn.cursor()
+            # --- CORREÇÃO: Executar diretamente na conexão da transação ---
+            with self.engine.connect() as connection:
+                with connection.begin(): # Inicia transação explícita
+                    # Executar INSERT do usuário
+                    result_user = connection.execute(text(user_query), user_params)
+                    user_id = result_user.scalar_one() # Obter o ID retornado
 
-            # Insert user
-            cursor.execute(user_query, user_params)
-            user_id = cursor.lastrowid
-            if user_id is None:
-                 conn.rollback()
-                 raise DatabaseError("Failed to insert user, no ID returned.")
-            user.id = user_id
-            user.permissions.user_id = user_id # Ensure permission object has user ID
-            logger.debug(f"User '{user.username}' inserted with ID: {user_id}")
+                    user.id = user_id
+                    if user.permissions: # Garantir que permissions existe
+                        user.permissions.user_id = user_id
+                    logger.debug(f"User '{user.username}' inserted with ID: {user_id} (within transaction).")
 
-            # Insert permissions
-            perm_params = (
-                user_id,
-                user.permissions.is_admin,
-                user.permissions.can_access_products,
-                user.permissions.can_access_fabrics,
-                user.permissions.can_access_customer_panel,
-                user.permissions.can_access_fiscal,
-                user.permissions.can_access_customer_panel
-            )
-            cursor.execute(perm_query, perm_params)
-            permission_id = cursor.lastrowid
-            if permission_id:
-                 user.permissions.id = permission_id
+                    # Preparar e executar INSERT de permissões NA MESMA TRANSAÇÃO
+                    if user.permissions:
+                         perm_params = {
+                            'user_id': user_id,
+                            'is_admin': user.permissions.is_admin,
+                            'can_access_products': user.permissions.can_access_products,
+                            'can_access_fabrics': user.permissions.can_access_fabrics,
+                            'can_access_customer_panel': user.permissions.can_access_customer_panel,
+                            'can_access_fiscal': user.permissions.can_access_fiscal,
+                            'can_access_accounts_receivable': user.permissions.can_access_accounts_receivable
+                         }
+                         result_perm = connection.execute(text(perm_query), perm_params)
+                         perm_id = result_perm.scalar_one_or_none()
+                         if perm_id:
+                              user.permissions.id = perm_id
+                         logger.debug(f"User permissions for user ID {user_id} inserted (within transaction).")
+                    else:
+                        # Deveria ter sido pego pela validação inicial, mas por segurança:
+                        logger.error(f"User object for ID {user_id} is missing permissions during add operation.")
+                        raise DatabaseError(f"Internal inconsistency: Permissions object missing for user {user_id} during creation.")
 
-            conn.commit()
-            logger.info(f"User '{user.username}' (ID: {user.id}) and permissions added successfully.")
-            return user
+                # Se sair do 'with connection.begin()' sem erro, COMMIT é feito.
+                logger.info(f"User '{user.username}' (ID: {user.id}) and permissions added and committed successfully.")
+                return user
+            # ----------------------------------------------------------------
 
-        except sqlite3.IntegrityError as e:
-            if conn: conn.rollback()
+        # Tratamento de erro permanece o mesmo, pois o rollback é automático
+        except IntegrityError as e:
             logger.warning(f"Database integrity error adding user '{user.username}': {e}")
-            if "UNIQUE constraint failed: users.username" in str(e):
+            error_str = str(e).lower()
+            if "users_username_key" in error_str or "unique constraint" in error_str and "username" in error_str:
                  raise ValueError(f"Username '{user.username}' already exists.")
-            if "UNIQUE constraint failed: users.email" in str(e) and user.email:
+            if "users_email_key" in error_str or "unique constraint" in error_str and "email" in error_str and user.email:
                  raise ValueError(f"Email '{user.email}' already exists.")
-            if "UNIQUE constraint failed: user_permissions.user_id" in str(e):
-                 raise DatabaseError(f"Permissions already exist for user ID {user.id}. Data inconsistency.")
+            # A FK violation não deve ocorrer aqui com a lógica corrigida, mas manter por segurança
+            if "user_permissions_user_id_fkey" in error_str:
+                 raise DatabaseError(f"Permissions foreign key error for user ID {user.id}. Data inconsistency.")
             raise DatabaseError(f"Failed to add user due to integrity constraint: {e}") from e
-        except sqlite3.Error as e:
-            if conn: conn.rollback()
+        except SQLAlchemyError as e:
             logger.error(f"Database error adding user '{user.username}': {e}", exc_info=True)
+            if "No rows returned for scalar_one()" in str(e):
+                 raise DatabaseError("Failed to get generated ID after insert.") from e
             raise DatabaseError(f"Failed to add user: {e}") from e
         except Exception as e:
-            if conn: conn.rollback()
-            logger.error(f"Unexpected error adding user '{user.username}': {e}", exc_info=True)
-            raise DatabaseError(f"An unexpected error occurred while adding user: {e}") from e
-        finally:
-            if conn:
-                self._release_connection(conn)
+             logger.error(f"Unexpected error adding user '{user.username}': {e}", exc_info=True)
+             raise DatabaseError(f"An unexpected error occurred while adding user: {e}") from e
 
     def update(self, user: User) -> bool:
-        """
-        Updates an existing user and their permissions.
-
-        Args:
-            user: The User object with updated data (must have an ID).
-
-        Returns:
-            True if the update was successful, False otherwise.
-
-        Raises:
-            DatabaseError: If the update fails.
-            ValueError: If user ID is missing or permissions are inconsistent.
-        """
+        """Updates an existing user and their permissions within a transaction."""
         if user.id is None:
             raise ValueError("Cannot update user without an ID.")
         if user.permissions is None:
              raise ValueError("User permissions are missing for update.")
-        # Check user_id match only if permissions object has a user_id set
         if user.permissions.user_id is not None and user.permissions.user_id != user.id:
              raise ValueError("User permissions user_id mismatch for update.")
-
+        if not user.password_hash:
+             raise ValueError("Password hash cannot be empty for update.")
 
         user_query = """
             UPDATE users SET
-                name = ?, email = ?, is_active = ?, last_login = ?, password_hash = ?
-            WHERE id = ?
+                name = :name, email = :email, is_active = :is_active,
+                last_login = :last_login, password_hash = :password_hash
+            WHERE id = :user_id
         """
-        if not user.password_hash:
-             raise ValueError("Password hash cannot be empty for update. Fetch user first if not changing password.")
+        user_params = {
+            'name': user.name, 'email': user.email, 'is_active': user.is_active,
+            'last_login': user.last_login, 'password_hash': user.password_hash,
+            'user_id': user.id
+        }
 
-        user_params = (
-            user.name, user.email, user.is_active, user.last_login, user.password_hash, user.id
-        )
-
-        # Use INSERT OR REPLACE for permissions to handle cases where they might not exist yet
-        # This simplifies logic compared to checking existence first.
-        perm_query = """
-            INSERT OR REPLACE INTO user_permissions
-            (user_id, is_admin, can_access_products, can_access_fabrics, can_access_customer_panel, can_access_fiscal, can_access_accounts_receivable) -- <<<--- ADDED
-            VALUES (?, ?, ?, ?, ?, ?, ?) -- <<<--- ADDED Placeholder
+        perm_update_query = """
+            UPDATE user_permissions SET
+                is_admin = :is_admin,
+                can_access_products = :can_access_products,
+                can_access_fabrics = :can_access_fabrics,
+                can_access_customer_panel = :can_access_customer_panel,
+                can_access_fiscal = :can_access_fiscal,
+                can_access_accounts_receivable = :can_access_accounts_receivable
+            WHERE user_id = :user_id
         """
-        perm_params = (
-            user.id, # Use user.id as the user_id
-            user.permissions.is_admin,
-            user.permissions.can_access_products,
-            user.permissions.can_access_fabrics,
-            user.permissions.can_access_customer_panel,
-            user.permissions.can_access_fiscal,
-            user.permissions.can_access_accounts_receivable
-        )
+        perm_insert_query = """
+            INSERT INTO user_permissions
+            (user_id, is_admin, can_access_products, can_access_fabrics, can_access_customer_panel, can_access_fiscal, can_access_accounts_receivable)
+            VALUES (:user_id, :is_admin, :can_access_products, :can_access_fabrics, :can_access_customer_panel, :can_access_fiscal, :can_access_accounts_receivable)
+        """
+        perm_params = {
+            'user_id': user.id,
+            'is_admin': user.permissions.is_admin,
+            'can_access_products': user.permissions.can_access_products,
+            'can_access_fabrics': user.permissions.can_access_fabrics,
+            'can_access_customer_panel': user.permissions.can_access_customer_panel,
+            'can_access_fiscal': user.permissions.can_access_fiscal,
+            'can_access_accounts_receivable': user.permissions.can_access_accounts_receivable
+        }
+        perm_check_query = "SELECT 1 FROM user_permissions WHERE user_id = :user_id"
+        perm_check_params = {'user_id': user.id}
 
-        conn = None
+        user_rows_affected = 0
+        perm_rows_affected = 0
+
         try:
-            conn = self._get_connection()
-            conn.execute("BEGIN;")
-            cursor = conn.cursor()
+            with self.engine.connect() as connection:
+                with connection.begin(): # Inicia transação
+                    # Atualizar usuário
+                    result_user = connection.execute(text(user_query), user_params)
+                    user_rows_affected = result_user.rowcount
 
-            # Update user
-            cursor.execute(user_query, user_params)
-            user_rows_affected = cursor.rowcount
+                    # Verificar se permissões existem
+                    perm_exists = connection.execute(text(perm_check_query), perm_check_params).scalar_one_or_none()
 
-            # Insert or Replace permissions
-            cursor.execute(perm_query, perm_params)
-            perm_rows_affected = cursor.rowcount # Will be 1 if inserted/replaced
+                    if perm_exists:
+                         # Atualizar permissões existentes
+                         result_perm = connection.execute(text(perm_update_query), perm_params)
+                         perm_rows_affected = result_perm.rowcount
+                    else:
+                         # Inserir permissões se não existirem
+                         connection.execute(text(perm_insert_query), perm_params)
+                         perm_rows_affected = 1 # Assumimos 1 linha inserida
 
-            conn.commit()
-            logger.info(f"User ID {user.id} update attempted. User rows affected: {user_rows_affected}, Perm rows affected/replaced: {perm_rows_affected}")
-            # Return True if user details OR permissions were potentially updated/inserted.
+            logger.info(f"User ID {user.id} update transaction completed. User rows: {user_rows_affected}, Perm rows: {perm_rows_affected}")
             return user_rows_affected > 0 or perm_rows_affected > 0
 
-        except sqlite3.IntegrityError as e:
-             if conn: conn.rollback()
+        except IntegrityError as e:
              logger.warning(f"Database integrity error updating user ID {user.id}: {e}")
-             if "UNIQUE constraint failed: users.email" in str(e) and user.email:
+             error_str = str(e).lower()
+             # Verificar constraint de email ÚNICO aqui também
+             if "users_email_key" in error_str or "unique constraint" in error_str and "email" in error_str:
                   raise ValueError(f"Email '{user.email}' is already in use by another user.")
              raise DatabaseError(f"Failed to update user due to integrity constraint: {e}") from e
-        except sqlite3.Error as e:
-            if conn: conn.rollback()
+        except SQLAlchemyError as e:
             logger.error(f"Database error updating user ID {user.id}: {e}", exc_info=True)
             raise DatabaseError(f"Failed to update user: {e}") from e
         except Exception as e:
-            if conn: conn.rollback()
             logger.error(f"Unexpected error updating user ID {user.id}: {e}", exc_info=True)
             raise DatabaseError(f"An unexpected error occurred while updating user: {e}") from e
-        finally:
-            if conn:
-                self._release_connection(conn)
+
 
     def delete(self, user_id: int) -> bool:
-        """
-        Deletes a user by their ID. Permissions are deleted via CASCADE.
-
-        Args:
-            user_id: The ID of the user to delete.
-
-        Returns:
-            True if deletion was successful (one user row affected), False otherwise.
-
-        Raises:
-            DatabaseError: If the deletion fails.
-        """
-        query = "DELETE FROM users WHERE id = ?"
-        conn = None
+        """Deletes a user by their ID within a transaction."""
+        query = "DELETE FROM users WHERE id = :user_id"
+        params = {'user_id': user_id}
+        rows_affected = 0
         try:
-            # Get connection and execute using BaseRepository method which handles commit/release for single ops
-            rows_affected = self._execute(query, (user_id,), fetch_mode="rowcount", single_op=True)
+            # --- CORREÇÃO: Usar transação explícita ---
+            with self.engine.connect() as connection:
+                with connection.begin(): # Inicia transação
+                    result = connection.execute(text(query), params)
+                    rows_affected = result.rowcount
+            # -----------------------------------------
 
-            if rows_affected is not None and rows_affected > 0:
-                logger.info(f"User ID {user_id} deleted successfully.")
+            if rows_affected > 0:
+                logger.info(f"User ID {user_id} deleted successfully (Permissions CASCADE expected).")
                 return True
             else:
-                logger.warning(f"Attempted to delete user ID {user_id}, but user was not found or delete failed silently.")
-                return False # Indicates no change or user not found
+                logger.warning(f"Attempted to delete user ID {user_id}, but user was not found or delete failed.")
+                return False
 
-        except sqlite3.Error as e:
+        except IntegrityError as e:
+             logger.error(f"Integrity error deleting user ID {user_id}: {e}", exc_info=True)
+             raise DatabaseError(f"Failed to delete user due to integrity constraint: {e}") from e
+        except SQLAlchemyError as e:
             logger.error(f"Database error deleting user ID {user_id}: {e}", exc_info=True)
             raise DatabaseError(f"Failed to delete user: {e}") from e
         except Exception as e:
             logger.error(f"Unexpected error deleting user ID {user_id}: {e}", exc_info=True)
             raise DatabaseError(f"An unexpected error occurred while deleting user: {e}") from e
-        # No finally block needed as _execute handles release
 
     def update_last_login(self, user_id: int) -> bool:
-        """
-        Updates the last_login timestamp for a user.
-
-        Args:
-            user_id: The ID of the user.
-
-        Returns:
-            True if successful, False otherwise.
-        """
-        query = "UPDATE users SET last_login = ? WHERE id = ?"
-        params = (datetime.now(), user_id)
+        """Updates the last_login timestamp for a user within a transaction."""
+        query = "UPDATE users SET last_login = :now WHERE id = :user_id"
+        from datetime import timezone # Importar timezone
+        params = {'now': datetime.now(timezone.utc), 'user_id': user_id}
+        rows_affected = 0
         try:
-            # Use single_op=True to let _execute handle commit/release
-            rows_affected = self._execute(query, params, fetch_mode="rowcount", single_op=True)
+            with self.engine.connect() as connection:
+                with connection.begin(): # Inicia transação
+                    result = connection.execute(text(query), params)
+                    rows_affected = result.rowcount
+
+            if rows_affected > 0:
+                 logger.debug(f"Updated last_login for user ID {user_id}.")
+                 return True
+            else:
+                 logger.warning(f"Failed to update last_login for user ID {user_id} (user not found?).")
+                 return False
+        except SQLAlchemyError as e:
+             logger.error(f"Failed to update last_login for user ID {user_id}: {e}", exc_info=True)
+             return False
+        except Exception as e:
+             logger.error(f"Unexpected error updating last_login for user ID {user_id}: {e}", exc_info=True)
+             return False
+
+    def update_last_login(self, user_id: int) -> bool:
+        """Updates the last_login timestamp for a user."""
+        query = "UPDATE users SET last_login = :now WHERE id = :user_id"
+        params = {'now': datetime.now(), 'user_id': user_id}
+        try:
+            # Envolve em transação para garantir atomicidade (boa prática)
+            with self.engine.connect() as connection:
+                with connection.begin():
+                    result = connection.execute(text(query), params)
+                    rows_affected = result.rowcount
+
             if rows_affected is not None and rows_affected > 0:
                  logger.debug(f"Updated last_login for user ID {user_id}.")
                  return True
             else:
-                 logger.warning(f"Failed to update last_login for user ID {user_id} (user not found or no change).")
+                 logger.warning(f"Failed to update last_login for user ID {user_id} (user not found?).")
                  return False
-        except DatabaseError as e:
+        except SQLAlchemyError as e:
              logger.error(f"Failed to update last_login for user ID {user_id}: {e}", exc_info=True)
+             # Não relançar como DatabaseError para não quebrar o fluxo de login necessariamente
              return False
         except Exception as e:
              logger.error(f"Unexpected error updating last_login for user ID {user_id}: {e}", exc_info=True)

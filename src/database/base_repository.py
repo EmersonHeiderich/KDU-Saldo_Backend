@@ -1,251 +1,172 @@
 # src/database/base_repository.py
-# Provides a base class for repository implementations with common DB operations.
+# Provides a base class for repository implementations using SQLAlchemy Core.
 
-import sqlite3
-from typing import Any, List, Optional, Dict, Tuple, Literal # Use Literal for FetchMode
-from .connection_pool import ConnectionPool
+import sqlite3 # Mantenha temporariamente para sqlite3.Error, mas será substituído
+from sqlalchemy.engine import Engine, Connection, Result # Importações SQLAlchemy
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError # Erros SQLAlchemy
+from sqlalchemy import text # Para executar SQL bruto
+from typing import Any, List, Optional, Dict, Tuple, Literal
+from .connection_pool import ConnectionPool # REMOVER ESTA LINHA - Não usamos mais o pool customizado
 from src.utils.logger import logger
 from src.api.errors import DatabaseError # Import custom error
 
-# Define FetchMode using Literal for better type checking
+# Define FetchMode usando Literal para melhor verificação de tipo
 FetchMode = Literal["all", "one", "none", "rowcount"]
 
 class BaseRepository:
     """
-    Base class for data repositories providing common database operations.
-    Manages connection acquisition and release from a connection pool.
+    Base class for data repositories providing common database operations
+    using SQLAlchemy Core Engine.
     """
 
-    def __init__(self, connection_pool: ConnectionPool):
+    def __init__(self, engine: Engine): # Recebe Engine SQLAlchemy
         """
         Initializes the BaseRepository.
 
         Args:
-            connection_pool: The ConnectionPool instance to use for database access.
+            engine: The SQLAlchemy Engine instance to use for database access.
         """
-        if not isinstance(connection_pool, ConnectionPool):
-             raise TypeError("connection_pool must be an instance of ConnectionPool")
-        self.connection_pool = connection_pool
-        logger.debug(f"{self.__class__.__name__} initialized with pool: {connection_pool.db_path}")
+        if not isinstance(engine, Engine):
+             raise TypeError("engine must be an instance of sqlalchemy.engine.Engine")
+        self.engine = engine
+        logger.debug(f"{self.__class__.__name__} initialized with SQLAlchemy engine: {engine.url.database}")
 
-    def _get_connection(self) -> sqlite3.Connection:
+    # REMOVER: _get_connection e _release_connection - SQLAlchemy gerencia isso
+
+    def _execute(self, query: str, params: Optional[Dict[str, Any]] = None, fetch_mode: FetchMode = "all") -> Any:
         """
-        Acquires a database connection from the pool.
-
-        Returns:
-            A sqlite3.Connection object.
-
-        Raises:
-            DatabaseError: If a connection cannot be acquired.
-        """
-        try:
-            logger.debug(f"[{self.__class__.__name__}] Acquiring connection from pool...")
-            conn = self.connection_pool.get_connection()
-            # Set row factory after acquiring
-            conn.row_factory = sqlite3.Row
-            logger.debug(f"[{self.__class__.__name__}] Connection acquired (id={id(conn)})")
-            return conn
-        except Exception as e:
-            logger.error(f"[{self.__class__.__name__}] Failed to acquire database connection: {e}", exc_info=True)
-            raise DatabaseError("Failed to acquire database connection") from e
-
-    def _release_connection(self, conn: Optional[sqlite3.Connection]):
-        """
-        Releases a database connection back to the pool.
+        Executes a SQL query using the SQLAlchemy engine.
+        NOTE: Assumes the caller manages transactions if multiple operations are needed.
 
         Args:
-            conn: The sqlite3.Connection object to release. If None, does nothing.
-        """
-        if conn:
-            try:
-                logger.debug(f"[{self.__class__.__name__}] Releasing connection (id={id(conn)}) back to pool.")
-                # Optionally reset row_factory before release if it was changed
-                # conn.row_factory = None
-                self.connection_pool.release_connection(conn)
-            except Exception as e:
-                logger.error(f"[{self.__class__.__name__}] Failed to release database connection (id={id(conn)}): {e}", exc_info=True)
-                # Don't raise here, as the primary operation might have succeeded.
-
-    def _execute(self, query: str, params: Optional[Tuple] = None, fetch_mode: FetchMode = "all", conn: Optional[sqlite3.Connection] = None, single_op: bool = False) -> Any:
-        """
-        Executes a SQL query using a provided or acquired connection.
-
-        Args:
-            query: The SQL query string.
-            params: Optional tuple of parameters for the query.
+            query: The SQL query string (use :param_name placeholders).
+            params: Optional dictionary of parameters for the query.
             fetch_mode: "all", "one", "none", or "rowcount".
-            conn: Optional existing connection to use. If None, acquires a new one.
-            single_op: If True and conn is None, commit/rollback happens within this method.
-                       If False or conn is provided, caller manages transaction.
 
         Returns:
             Query results based on fetch_mode:
             - "all": List of dictionaries.
             - "one": Single dictionary or None.
-            - "none": Last inserted row ID (for INSERT) or None otherwise.
-            - "rowcount": Number of rows affected by UPDATE/DELETE, or None on error.
+            - "none": Last inserted ID (if query uses RETURNING) or None.
+            - "rowcount": Number of rows affected by UPDATE/DELETE.
 
         Raises:
             DatabaseError: For database-related errors during execution.
             ValueError: If fetch_mode is invalid.
         """
-        acquired_conn = None
-        if conn is None:
-            acquired_conn = self._get_connection()
-            target_conn = acquired_conn
-        else:
-            target_conn = conn
-
-        # Ensure row_factory is set (might be reset by pool or other parts)
-        if target_conn.row_factory is not sqlite3.Row:
-            target_conn.row_factory = sqlite3.Row
-
         if fetch_mode not in ("all", "one", "none", "rowcount"):
-            if acquired_conn: self._release_connection(acquired_conn)
             raise ValueError(f"Invalid fetch_mode: {fetch_mode}")
 
-        cursor = None
+        # Use o engine para obter uma conexão (gerenciada pelo 'with')
         try:
-            logger.debug(f"[{self.__class__.__name__}] Executing query: {query} with params: {params} (Fetch: {fetch_mode}, SingleOp: {single_op and acquired_conn is not None})")
-            cursor = target_conn.cursor()
+            with self.engine.connect() as connection:
+                logger.debug(f"[{self.__class__.__name__}] Executing query: {query[:200]}... with params: {params} (Fetch: {fetch_mode})")
 
-            if params:
-                cursor.execute(query, params)
-            else:
-                cursor.execute(query)
+                # Execute a query usando text() para SQL bruto
+                # Params devem ser um dicionário para placeholders nomeados (ex: :user_id)
+                sql_text = text(query)
+                result: Result = connection.execute(sql_text, parameters=params or {})
 
-            result: Any = None
-            rows_affected: Optional[int] = None # Store rowcount for logging/return
+                # Tratamento do resultado baseado no fetch_mode
+                output: Any = None
+                if fetch_mode == "all":
+                    # Result.mappings() retorna uma lista iterável de dicionários (RowMapping)
+                    rows = result.mappings().all()
+                    output = [dict(row) for row in rows] # Converte para dicts padrão
+                    logger.debug(f"[{self.__class__.__name__}] Query returned {len(output)} rows.")
+                elif fetch_mode == "one":
+                    row = result.mappings().first() # Pega a primeira linha como dict ou None
+                    output = dict(row) if row else None
+                    logger.debug(f"[{self.__class__.__name__}] Query returned one row: {'Found' if output else 'Not Found'}.")
+                elif fetch_mode == "rowcount":
+                    # Result.rowcount contém o número de linhas afetadas para DML (UPDATE/DELETE)
+                    # Nota: Para INSERT, pode ser -1 ou 1 dependendo do driver/setup.
+                    # Para SELECT, geralmente é -1.
+                    output = result.rowcount
+                    logger.debug(f"[{self.__class__.__name__}] Query executed (rowcount). Rows affected: {output}")
+                elif fetch_mode == "none":
+                    # Útil para INSERTs. Se a query usar RETURNING id, o ID estará no resultado.
+                    # .scalar_one_or_none() pega o primeiro valor da primeira linha, se houver.
+                    # Isso assume que o INSERT foi escrito com "RETURNING id".
+                    try:
+                        output = result.scalar_one_or_none()
+                        logger.debug(f"[{self.__class__.__name__}] Query executed (no fetch/scalar). Returned value (e.g., last ID): {output}")
+                    except Exception as scalar_err:
+                        # Pode falhar se RETURNING não foi usado ou retornou múltiplas colunas/linhas
+                        logger.warning(f"[{self.__class__.__name__}] Could not get scalar result (maybe RETURNING not used?): {scalar_err}")
+                        output = None
 
-            # Capture rowcount immediately after execute for UPDATE/DELETE
-            if query.strip().upper().startswith(("UPDATE", "DELETE")):
-                 rows_affected = cursor.rowcount
+                # --- IMPORTANTE: Commits são gerenciados FORA desta função ---
+                # Se esta execução for parte de uma transação maior, o commit
+                # acontecerá quando o bloco 'connection.begin()' externo for concluído.
+                # Se for uma operação única, o 'connection' do SQLAlchemy pode
+                # operar em modo 'autocommit' dependendo da configuração do engine
+                # ou do dialeto, mas é mais seguro gerenciar explicitamente com begin().
+                # Para manter a API consistente, esta função NÃO faz commit.
 
-            if fetch_mode == "all":
-                rows = cursor.fetchall()
-                result = [dict(row) for row in rows]
-                logger.debug(f"[{self.__class__.__name__}] Query returned {len(result)} rows.")
-            elif fetch_mode == "one":
-                row = cursor.fetchone()
-                result = dict(row) if row else None
-                logger.debug(f"[{self.__class__.__name__}] Query returned one row: {'Found' if result else 'Not Found'}.")
-            elif fetch_mode == "rowcount":
-                 result = rows_affected
-                 logger.debug(f"[{self.__class__.__name__}] Query executed (rowcount). Rows affected: {result}")
-            else: # "none"
-                result = cursor.lastrowid if query.strip().upper().startswith("INSERT") else None
-                logger.debug(f"[{self.__class__.__name__}] Query executed (no fetch). Last row ID: {result}")
+                return output
 
-            # Commit if we acquired the connection AND it's flagged as a single operation.
-            if acquired_conn and single_op:
-                 logger.debug(f"[{self.__class__.__name__}] Committing changes for single operation.")
-                 target_conn.commit()
-
-            return result
-
-        except sqlite3.Error as db_err:
-            # Rollback if we acquired the connection AND it's flagged as a single operation.
-            if acquired_conn and single_op:
-                 logger.warning(f"[{self.__class__.__name__}] Rolling back single operation due to SQLite error.")
-                 try: acquired_conn.rollback()
-                 except Exception as rb_err: logger.error(f"[{self.__class__.__name__}] Error during single op rollback: {rb_err}", exc_info=True)
-
-            logger.error(f"[{self.__class__.__name__}] SQLite error executing query: {db_err}", exc_info=True)
+        # Captura erros específicos do SQLAlchemy e erros gerais
+        except IntegrityError as integrity_err: # Erro de violação de constraint (ex: UNIQUE)
+             logger.error(f"[{self.__class__.__name__}] Database Integrity error executing query: {integrity_err}", exc_info=True)
+             logger.error(f"Failed Query: {query}, Params: {params}")
+             # Re-lançar como DatabaseError ou deixar o chamador tratar IntegrityError?
+             # Lançar como DatabaseError pode mascarar a causa específica.
+             # Vamos manter o IntegrityError por enquanto, repositórios podem capturá-lo.
+             # raise DatabaseError(f"Database integrity constraint violated: {integrity_err}") from integrity_err
+             raise integrity_err # Deixar o repositório específico tratar
+        except SQLAlchemyError as db_err: # Outros erros SQLAlchemy (conexão, sintaxe SQL no DB, etc.)
+            logger.error(f"[{self.__class__.__name__}] SQLAlchemy error executing query: {db_err}", exc_info=True)
             logger.error(f"Failed Query: {query}, Params: {params}")
             raise DatabaseError(f"Database error occurred: {db_err}") from db_err
         except Exception as e:
-             # Rollback if we acquired the connection AND it's flagged as a single operation.
-            if acquired_conn and single_op:
-                 logger.warning(f"[{self.__class__.__name__}] Rolling back single operation due to general error.")
-                 try: acquired_conn.rollback()
-                 except Exception as rb_err: logger.error(f"[{self.__class__.__name__}] Error during single op rollback: {rb_err}", exc_info=True)
-
             logger.error(f"[{self.__class__.__name__}] General error executing query: {e}", exc_info=True)
             raise DatabaseError(f"An unexpected error occurred during database operation: {e}") from e
-        finally:
-             if cursor:
-                 try: cursor.close()
-                 except Exception as cur_err: logger.warning(f"[{self.__class__.__name__}] Error closing cursor: {cur_err}")
-             # Release connection only if it was acquired within this method
-             if acquired_conn:
-                 self._release_connection(acquired_conn)
 
 
-    def _execute_transaction(self, operations: List[Tuple[str, Optional[Tuple]]]) -> bool:
+    def _execute_transaction(self, operations: List[Tuple[str, Optional[Dict[str, Any]]]]) -> bool:
         """
-        Executes multiple SQL operations within a single transaction.
-        The caller ensures the operations make sense together.
+        Executes multiple SQL operations within a single transaction using SQLAlchemy.
 
         Args:
             operations: A list of tuples, where each tuple contains:
-                        (query_string, optional_parameters_tuple).
+                        (query_string with :param placeholders,
+                         optional_parameters_dictionary).
 
         Returns:
             True if the transaction was successful.
 
         Raises:
             DatabaseError: If a connection cannot be acquired or a database error occurs during the transaction.
+            IntegrityError: If a constraint violation occurs during the transaction.
         """
-        conn = None
+        # Use o engine para obter uma conexão
         try:
-            conn = self._get_connection()
-            cursor = conn.cursor()
-            logger.debug(f"[{self.__class__.__name__}] Starting transaction with {len(operations)} operations.")
-            conn.execute("BEGIN;") # Explicitly start transaction
-
-            for i, (query, params) in enumerate(operations):
-                logger.debug(f"[{self.__class__.__name__}] Transaction op {i+1}: {query} with params: {params}")
-                if params:
-                    cursor.execute(query, params)
-                else:
-                    cursor.execute(query)
-
-            conn.commit() # Commit transaction
+            with self.engine.connect() as connection:
+                # Inicie uma transação (commit/rollback automático pelo 'with')
+                with connection.begin():
+                    logger.debug(f"[{self.__class__.__name__}] Starting transaction with {len(operations)} operations.")
+                    for i, (query, params) in enumerate(operations):
+                        logger.debug(f"[{self.__class__.__name__}] Transaction op {i+1}: {query[:200]}... with params: {params}")
+                        sql_text = text(query)
+                        connection.execute(sql_text, parameters=params or {})
+                    logger.debug(f"[{self.__class__.__name__}] Transaction operations executed successfully (commit pending).")
+            # Se chegou aqui sem erro, o 'connection.begin()' fez commit automaticamente.
             logger.debug(f"[{self.__class__.__name__}] Transaction committed successfully.")
             return True
 
-        except sqlite3.Error as db_err:
-            if conn:
-                 logger.warning(f"[{self.__class__.__name__}] Rolling back transaction due to SQLite error.")
-                 try: conn.rollback()
-                 except Exception as rb_err: logger.error(f"[{self.__class__.__name__}] Error during transaction rollback: {rb_err}", exc_info=True)
-            logger.error(f"[{self.__class__.__name__}] SQLite error during transaction: {db_err}", exc_info=True)
+        # Captura erros específicos e gerais
+        except IntegrityError as integrity_err:
+             # O rollback é feito automaticamente pelo 'connection.begin()'
+             logger.error(f"[{self.__class__.__name__}] Database Integrity error during transaction: {integrity_err}", exc_info=True)
+             raise integrity_err # Re-lança para o chamador
+        except SQLAlchemyError as db_err:
+            # O rollback é feito automaticamente
+            logger.error(f"[{self.__class__.__name__}] SQLAlchemy error during transaction: {db_err}", exc_info=True)
             raise DatabaseError(f"Database transaction failed: {db_err}") from db_err
         except Exception as e:
-            if conn:
-                 logger.warning(f"[{self.__class__.__name__}] Rolling back transaction due to general error.")
-                 try: conn.rollback()
-                 except Exception as rb_err: logger.error(f"[{self.__class__.__name__}] Error during transaction rollback: {rb_err}", exc_info=True)
+            # O rollback é feito automaticamente
             logger.error(f"[{self.__class__.__name__}] General error during transaction: {e}", exc_info=True)
             raise DatabaseError(f"An unexpected error occurred during database transaction: {e}") from e
-        finally:
-            if conn:
-                self._release_connection(conn) # Release connection back to pool
 
-    def _get_last_insert_id(self, conn: sqlite3.Connection) -> Optional[int]:
-        """
-        Gets the rowid of the last row inserted in the *current* connection.
-        Should be called within the same transaction/connection context as the INSERT.
-        NOTE: Use cursor.lastrowid directly after execute within the same cursor context for reliability.
-
-        Args:
-            conn: The connection used for the INSERT statement.
-
-        Returns:
-            The last inserted row ID, or None if no insert occurred or not applicable.
-        """
-        cursor = None
-        try:
-             # This approach is less reliable than using cursor.lastrowid immediately after execute
-             logger.warning("Using SELECT last_insert_rowid() is less reliable than cursor.lastrowid")
-             cursor = conn.cursor()
-             cursor.execute("SELECT last_insert_rowid()")
-             result = cursor.fetchone()
-             return result[0] if result else None
-        except sqlite3.Error as e:
-             logger.error(f"[{self.__class__.__name__}] Error getting last insert ID: {e}", exc_info=True)
-             return None
-        finally:
-             if cursor:
-                  try: cursor.close()
-                  except Exception as cur_err: logger.warning(f"[{self.__class__.__name__}] Error closing cursor for last insert ID: {cur_err}")
+    # REMOVER: _get_last_insert_id - Use "RETURNING id" no INSERT e fetch_mode="none" ou "one" no _execute

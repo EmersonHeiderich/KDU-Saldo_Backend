@@ -6,3 +6,5 @@ psutil>=5.8.0
 PyJWT>=2.0.0
 bcrypt>=3.2.0
 cachetools>=5.0.0
+SQLAlchemy>=2.0
+psycopg>=3.0

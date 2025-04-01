@@ -1,125 +1,164 @@
 # src/database/__init__.py
-# Initializes and manages database components.
+# Initializes and manages database components using SQLAlchemy.
 
 import threading
 from typing import Optional
-from .connection_pool import ConnectionPool
+from sqlalchemy import create_engine
+from sqlalchemy.engine import Engine # Import Engine type hint
+from sqlalchemy.exc import SQLAlchemyError
+
+# Importações de Repositórios e Schema Manager permanecem
 from .schema_manager import SchemaManager
 from .user_repository import UserRepository
 from .observation_repository import ObservationRepository
 from src.utils.logger import logger
+from src.api.errors import DatabaseError # Import custom error
 
-# Global pool instance (initialized by init_db)
-_db_pool_instance: Optional[ConnectionPool] = None
-_db_lock = threading.Lock()
+# --- SQLAlchemy Engine Global ---
+_sqla_engine: Optional[Engine] = None
+_engine_lock = threading.Lock()
 
-def init_db(database_path: str, max_connections: int = 10, timeout: int = 30) -> ConnectionPool:
+# --- Função de Inicialização do Engine ---
+def init_sqlalchemy_engine(database_uri: str, pool_size: int = 10, max_overflow: int = 20) -> Engine:
     """
-    Initializes the database connection pool and schema.
+    Initializes the SQLAlchemy engine and database schema.
     Should be called once during application startup.
 
     Args:
-        database_path: Path to the SQLite database file.
-        max_connections: Maximum number of connections in the pool.
-        timeout: Timeout for acquiring a connection.
+        database_uri: The full database connection URI (e.g., "postgresql+psycopg://...").
+        pool_size: The number of connections to keep open in the pool.
+        max_overflow: The number of connections that can be opened beyond pool_size.
 
     Returns:
-        The initialized ConnectionPool instance.
+        The initialized SQLAlchemy Engine instance.
 
     Raises:
-        Exception: If initialization fails.
+        DatabaseError: If initialization or schema setup fails.
     """
-    global _db_pool_instance
-    with _db_lock:
-        if _db_pool_instance:
-            logger.warning("Database pool already initialized.")
-            return _db_pool_instance
+    global _sqla_engine
+    with _engine_lock:
+        if _sqla_engine:
+            logger.warning("SQLAlchemy engine already initialized.")
+            return _sqla_engine
 
-        logger.info(f"Initializing database at: {database_path}")
+        if not database_uri:
+             logger.critical("Database URI is not configured. Cannot initialize SQLAlchemy engine.")
+             raise DatabaseError("Database URI is missing in configuration.")
+
+        logger.info(f"Initializing SQLAlchemy engine for URI: {'********'.join(database_uri.split('@'))}") # Log URI without password part
         try:
-            pool = ConnectionPool(database_path, max_connections, timeout)
-            schema_manager = SchemaManager(pool)
-            schema_manager.initialize_schema() # Creates tables, runs migrations
+            # Create the SQLAlchemy engine
+            # pool_recycle: Optional, time in seconds to recycle connections (e.g., 3600 for 1 hour)
+            # echo=True: Useful for debugging SQL, set based on Flask debug mode maybe
+            engine = create_engine(
+                database_uri,
+                pool_size=pool_size,
+                max_overflow=max_overflow,
+                pool_recycle=3600, # Recycle connections after 1 hour
+                # echo=current_app.config.get('APP_DEBUG', False) # Requires access to app context or pass debug flag
+                echo=False # Start with echo=False
+            )
 
-            # Store the initialized pool
-            _db_pool_instance = pool
-            logger.info("Database initialization complete.")
-            return _db_pool_instance
+            # --- Test Connection (Optional but recommended) ---
+            try:
+                with engine.connect() as connection:
+                    logger.info("Database connection successful.")
+                    # Optionally run a simple query: connection.execute(text("SELECT 1"))
+            except SQLAlchemyError as conn_err:
+                 logger.critical(f"Database connection failed: {conn_err}", exc_info=True)
+                 raise DatabaseError(f"Failed to connect to the database: {conn_err}") from conn_err
+
+            # --- Initialize Schema ---
+            # SchemaManager now needs the engine to get connections
+            # We'll adapt SchemaManager in a later step to accept the engine
+            # For now, assume it can work with the engine (it needs adaptation)
+            try:
+                 # !!! NOTE: SchemaManager needs adaptation to use the Engine !!!
+                 logger.info("Initializing database schema...")
+                 schema_manager = SchemaManager(engine) # Pass engine instead of pool
+                 schema_manager.initialize_schema() # Creates tables, runs migrations
+                 logger.info("Database schema initialization complete.")
+            except Exception as schema_err:
+                 logger.critical(f"Database schema initialization failed: {schema_err}", exc_info=True)
+                 # Don't leave a partially initialized engine if schema fails
+                 engine.dispose() # Close the engine pool if schema fails
+                 raise DatabaseError(f"Schema initialization failed: {schema_err}") from schema_err
+
+
+            # Store the initialized engine
+            _sqla_engine = engine
+            logger.info("SQLAlchemy engine initialization complete.")
+            return _sqla_engine
+
+        except SQLAlchemyError as e:
+             logger.critical(f"SQLAlchemy engine creation failed: {e}", exc_info=True)
+             raise DatabaseError(f"SQLAlchemy engine creation failed: {e}") from e
         except Exception as e:
-            logger.critical(f"Database initialization failed: {e}", exc_info=True)
-            # Ensure pool is cleaned up if partially created before error
-            if 'pool' in locals() and isinstance(pool, ConnectionPool):
-                try:
-                    pool.close_all()
-                except Exception as close_e:
-                    logger.error(f"Error closing pool during failed init: {close_e}")
-            _db_pool_instance = None # Ensure instance is None on failure
-            raise # Re-raise the exception to signal failure
+            logger.critical(f"Unexpected error during SQLAlchemy initialization: {e}", exc_info=True)
+            raise DatabaseError(f"Unexpected error during database initialization: {e}") from e
 
-def get_db_pool() -> ConnectionPool:
+# --- Função para Obter o Engine ---
+def get_sqlalchemy_engine() -> Engine:
     """
-    Returns the singleton database connection pool instance.
+    Returns the singleton SQLAlchemy engine instance.
 
     Returns:
-        The ConnectionPool instance.
+        The Engine instance.
 
     Raises:
-        RuntimeError: If the database pool has not been initialized.
+        RuntimeError: If the engine has not been initialized.
     """
-    # No need for lock here if _db_pool_instance is set only once during init
-    if not _db_pool_instance:
-        # This should ideally not happen if init_db is called correctly at startup
-        logger.error("Database pool accessed before initialization.")
-        raise RuntimeError("Database pool has not been initialized. Call init_db() first.")
-    return _db_pool_instance
+    if not _sqla_engine:
+        # This should ideally not happen if init_sqlalchemy_engine is called correctly at startup
+        logger.error("SQLAlchemy engine accessed before initialization.")
+        raise RuntimeError("Database engine has not been initialized. Call init_sqlalchemy_engine() first.")
+    return _sqla_engine
 
-def release_db_connection(exception=None):
-    """Releases the current thread's connection back to the pool."""
-    pool = _db_pool_instance # Get instance directly (safe after init)
-    if pool:
-        # Pass None explicitly so release_connection uses thread-local
-        pool.release_connection(None)
-        # logger.debug("Database connection released for this context.") # Can be noisy
-    # else: # Should not happen if app started correctly
-    #     logger.warning("Attempted to release DB connection, but pool is not initialized.")
-
-
-def close_db_pool():
-    """Closes all connections in the pool. Call during application shutdown ONLY."""
-    global _db_pool_instance
-    with _db_lock:
-        if _db_pool_instance:
-            logger.info("Closing database connection pool...")
+# --- Função de Desligamento do Engine (Opcional, mas bom ter) ---
+def dispose_sqlalchemy_engine():
+    """Closes all connections in the engine's pool. Call during application shutdown."""
+    global _sqla_engine
+    with _engine_lock:
+        if _sqla_engine:
+            logger.info("Disposing SQLAlchemy engine connection pool...")
             try:
-                _db_pool_instance.close_all()
-                _db_pool_instance = None # Clear the instance
-                logger.info("Database connection pool closed.")
+                _sqla_engine.dispose()
+                _sqla_engine = None # Clear the instance
+                logger.info("SQLAlchemy engine connection pool disposed.")
             except Exception as e:
-                logger.error(f"Error closing database pool: {e}", exc_info=True)
+                logger.error(f"Error disposing SQLAlchemy engine pool: {e}", exc_info=True)
         else:
-            logger.debug("Database pool shutdown called, but pool already closed or not initialized.")
+            logger.debug("SQLAlchemy engine shutdown called, but engine already disposed or not initialized.")
 
-# --- Convenience methods to get repositories ---
+
+# --- Fábricas de Repositórios Atualizadas ---
 def get_user_repository() -> UserRepository:
-    """Gets an instance of UserRepository using the global pool."""
-    pool = get_db_pool()
-    return UserRepository(pool)
+    """Gets an instance of UserRepository using the global SQLAlchemy engine."""
+    engine = get_sqlalchemy_engine()
+    # !!! NOTE: UserRepository constructor needs adaptation to accept Engine !!!
+    return UserRepository(engine) # Pass engine
 
 def get_observation_repository() -> ObservationRepository:
-    """Gets an instance of ObservationRepository using the global pool."""
-    pool = get_db_pool()
-    return ObservationRepository(pool)
+    """Gets an instance of ObservationRepository using the global SQLAlchemy engine."""
+    engine = get_sqlalchemy_engine()
+    # !!! NOTE: ObservationRepository constructor needs adaptation to accept Engine !!!
+    return ObservationRepository(engine) # Pass engine
 
-
+# --- Itens Exportados Atualizados ---
 __all__ = [
-    "init_db",
-    "get_db_pool",
-    "release_db_connection", # Expose release function
-    "close_db_pool",         # Expose pool closing function (rename original close_db)
-    "ConnectionPool",
+    # Novas funções
+    "init_sqlalchemy_engine",
+    "get_sqlalchemy_engine",
+    "dispose_sqlalchemy_engine",
+    # Tipos/Classes (Engine opcional, Repos e Schema Manager mantidos)
+    "Engine",
     "UserRepository",
     "ObservationRepository",
     "SchemaManager",
+    # Funções de fábrica mantidas
     "get_user_repository",
     "get_observation_repository",
 ]
+
+# Remover a importação do pool antigo se ainda existir
+# from .connection_pool import ConnectionPool # REMOVER

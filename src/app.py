@@ -1,18 +1,29 @@
 # src/app.py
-# Contains the Flask application factory.
+# Contains the Flask application factory using SQLAlchemy.
 
 from flask import Flask, jsonify
 from flask_cors import CORS
 import atexit
+import os # Necessário para WERKZEUG_RUN_MAIN
+# Importar erro SQLAlchemy para captura
+from sqlalchemy.exc import SQLAlchemyError
 
 from src.config import Config
 from src.api import register_blueprints
-from src.api.errors import register_error_handlers, ConfigurationError # Import error
-from src.database import init_db, close_db_pool, release_db_connection, get_db_pool
+from src.api.errors import register_error_handlers, ConfigurationError, DatabaseError # Importar DatabaseError também
+# Importar novas funções SQLAlchemy e remover antigas
+from src.database import (
+    init_sqlalchemy_engine, # NOVA função
+    dispose_sqlalchemy_engine, # NOVA função
+    # init_db, # REMOVER
+    # close_db_pool, # REMOVER
+    # release_db_connection, # REMOVER
+    get_sqlalchemy_engine # NOVA função (usada implicitamente pelas fábricas de repo)
+)
 from src.utils.logger import logger, configure_logger
-from src.utils.system_monitor import start_resource_monitor, stop_resource_monitor # Import monitor functions
+from src.utils.system_monitor import start_resource_monitor, stop_resource_monitor
 
-# Import Services
+# Import Services (permanece igual)
 from src.services import (
     AuthService,
     CustomerService,
@@ -22,25 +33,26 @@ from src.services import (
     FiscalService,
     AccountsReceivableService
 )
-# Import Repositories/ERP Services needed for Service instantiation
+# Import Repositories/ERP Services (permanece igual, mas agora usam SQLAlchemy engine internamente)
 from src.database import (
     get_user_repository,
     get_observation_repository
+    # Não precisamos mais de get_db_pool diretamente aqui
 )
 from src.erp_integration import (
-    erp_auth_service, # Use singleton auth service
+    erp_auth_service,
     ErpBalanceService,
     ErpCostService,
     ErpPersonService,
     ErpProductService,
     ErpFiscalService,
-    ErpAccountsReceivableService # <<<--- ADDED
+    ErpAccountsReceivableService
 )
 
 
 def create_app(config_object: Config) -> Flask:
     """
-    Factory function to create and configure the Flask application.
+    Factory function to create and configure the Flask application with SQLAlchemy.
 
     Args:
         config_object: The configuration object for the application.
@@ -60,37 +72,49 @@ def create_app(config_object: Config) -> Flask:
     # --- Secret Key Check ---
     if not app.config.get('SECRET_KEY') or app.config.get('SECRET_KEY') == 'default_secret_key_change_me_in_env':
             logger.critical("CRITICAL SECURITY WARNING: SECRET_KEY is not set or is using the default value!")
-            # Optionally raise an error in non-debug mode?
             if not app.config.get('APP_DEBUG', False):
                 raise ConfigurationError("SECRET_KEY must be set to a secure, unique value in production.")
             else:
                 logger.warning("Using default/insecure SECRET_KEY in debug mode.")
 
-
     # --- CORS Configuration ---
-    # TODO: Restrict origins for production
-    CORS(app, supports_credentials=True, resources={r"/api/*": {"origins": "*"}}) # Allow all for now
+    CORS(app, supports_credentials=True, resources={r"/api/*": {"origins": "*"}})
     logger.info("CORS configured to allow all origins (Update for production).")
 
-    # --- Database Initialization ---
+    # --- Database Initialization (SQLAlchemy) ---
     try:
-        init_db(app.config['DATABASE_PATH'])
-        logger.info("Database pool initialized successfully.")
-        # Register teardown function to release DB connections
-        app.teardown_appcontext(release_db_connection)
-        logger.debug("Registered database connection release for app context teardown.")
-        # Register function to close pool on app exit
-        atexit.register(close_db_pool)
-        logger.debug("Registered database pool closure for application exit.")
-    except Exception as db_init_err:
-        logger.critical(f"Failed to initialize database: {db_init_err}", exc_info=True)
-        # Exit? Or let it run without DB? Let it run but endpoints needing DB will fail.
-        # sys.exit(1) # Uncomment to force exit on DB init failure
+        db_uri = app.config.get('SQLALCHEMY_DATABASE_URI')
+        if not db_uri:
+             raise ConfigurationError("SQLALCHEMY_DATABASE_URI is not configured.")
+
+        # Chamar a nova função de inicialização do SQLAlchemy Engine
+        init_sqlalchemy_engine(db_uri)
+        logger.info("SQLAlchemy engine initialized successfully.")
+
+        # Remover o teardown antigo, SQLAlchemy gerencia conexões via contexto 'with'
+        # app.teardown_appcontext(release_db_connection) # REMOVER
+
+        # Registrar função para fechar pool do engine no desligamento da app
+        atexit.register(dispose_sqlalchemy_engine)
+        logger.debug("Registered SQLAlchemy engine disposal for application exit.")
+
+    except (DatabaseError, ConfigurationError, SQLAlchemyError) as db_init_err:
+        logger.critical(f"Failed to initialize database engine or schema: {db_init_err}", exc_info=True)
+        # Considerar se a aplicação pode rodar sem banco, ou forçar saída:
+        # import sys
+        # sys.exit(1)
+    except Exception as generic_db_err:
+         logger.critical(f"Unexpected error during database initialization: {generic_db_err}", exc_info=True)
+         # import sys
+         # sys.exit(1)
+
 
     # --- Dependency Injection (Service Instantiation) ---
+    # Esta parte não muda, pois as fábricas get_user_repository/get_observation_repository
+    # foram atualizadas para usar o engine SQLAlchemy internamente.
     logger.info("Instantiating services...")
     try:
-        # Database Repositories (using factory functions)
+        # Database Repositories (usando fábricas atualizadas)
         user_repo = get_user_repository()
         observation_repo = get_observation_repository()
 
@@ -100,7 +124,7 @@ def create_app(config_object: Config) -> Flask:
         erp_person_svc = ErpPersonService(erp_auth_service)
         erp_product_svc = ErpProductService(erp_auth_service)
         erp_fiscal_svc = ErpFiscalService(erp_auth_service)
-        erp_ar_svc = ErpAccountsReceivableService(erp_auth_service) # <<<--- ADDED
+        erp_ar_svc = ErpAccountsReceivableService(erp_auth_service)
 
         # Application Services
         auth_svc = AuthService(user_repo)
@@ -109,21 +133,22 @@ def create_app(config_object: Config) -> Flask:
         observation_svc = ObservationService(observation_repo)
         product_svc = ProductService(erp_balance_svc)
         fiscal_svc = FiscalService(erp_fiscal_svc)
-        ar_svc = AccountsReceivableService(erp_ar_svc, erp_person_svc) # <<<--- ADDED
+        ar_svc = AccountsReceivableService(erp_ar_svc, erp_person_svc)
 
-        # Store service instances in app config for access in routes/decorators
+        # Store service instances in app config
         app.config['auth_service'] = auth_svc
         app.config['customer_service'] = customer_svc
         app.config['fabric_service'] = fabric_svc
         app.config['observation_service'] = observation_svc
         app.config['product_service'] = product_svc
         app.config['fiscal_service'] = fiscal_svc
-        app.config['accounts_receivable_service'] = ar_svc # <<<--- ADDED
+        app.config['accounts_receivable_service'] = ar_svc
         logger.info("Services instantiated and added to app config.")
 
     except Exception as service_init_err:
         logger.critical(f"Failed to instantiate services: {service_init_err}", exc_info=True)
         # Exit if services are critical?
+        # import sys
         # sys.exit(1)
 
     # --- Register Blueprints (API Routes) ---
@@ -133,16 +158,26 @@ def create_app(config_object: Config) -> Flask:
     register_error_handlers(app)
 
     # --- Resource Monitoring ---
+    # Adicionado cheque para WERKZEUG_RUN_MAIN para evitar iniciar duas vezes em modo debug
     if not app.debug or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
-        # Start monitor only in main process (or if not in debug)
-        start_resource_monitor(interval_seconds=300) # Log every 5 mins
-        atexit.register(stop_resource_monitor) # Register stop on exit
+        start_resource_monitor(interval_seconds=300)
+        atexit.register(stop_resource_monitor)
 
     # --- Simple Health Check Endpoint ---
     @app.route('/health', methods=['GET'])
     def health_check():
-        # Basic check, can be expanded later (e.g., check DB connection)
-        return jsonify({"status": "ok"}), 200
+        db_status = "ok"
+        try:
+             # Teste rápido de conexão com o banco
+             engine = get_sqlalchemy_engine()
+             with engine.connect() as connection:
+                  # connection.execute(text("SELECT 1")) # Opcional
+                  pass # A conexão em si já é um bom teste
+        except Exception as e:
+             logger.error(f"Health check database connection failed: {e}")
+             db_status = "error"
 
-    logger.info("Flask application configured successfully.")
+        return jsonify({"status": "ok", "database": db_status}), 200 if db_status == "ok" else 503
+
+    logger.info("Flask application configured successfully with SQLAlchemy.")
     return app
