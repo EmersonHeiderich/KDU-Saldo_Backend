@@ -159,6 +159,3 @@ __all__ = [
     "get_user_repository",
     "get_observation_repository",
 ]
-
-# Remover a importação do pool antigo se ainda existir
-# from .connection_pool import ConnectionPool # REMOVER

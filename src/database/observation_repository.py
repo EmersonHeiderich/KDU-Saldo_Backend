@@ -1,11 +1,8 @@
 # src/database/observation_repository.py
 # Handles database operations for Product Observations using SQLAlchemy.
 
-# REMOVER import sqlite3 se não for mais necessário para compatibilidade
-# import sqlite3
 from datetime import datetime
 from typing import List, Optional, Dict, Any
-# Importar text do sqlalchemy
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError

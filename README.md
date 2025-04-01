@@ -1,16 +1,16 @@
-
 # Saldo API
 
-API Flask para consulta de saldos de produtos e tecidos, custos, dados de clientes e contas a receber, integrando-se a um ERP TOTVS.
+API Flask para consulta de saldos de produtos e tecidos, custos, dados de clientes e contas a receber, integrando-se a um ERP TOTVS e utilizando PostgreSQL como banco de dados.
 
 ## Funcionalidades Principais
 
 *   **Consulta de Saldo de Produtos:** Retorna o saldo de produtos acabados em formato de matriz (cor x tamanho), com diferentes modos de cálculo (base, vendas, produção).
 *   **Consulta de Saldo de Tecidos:** Retorna uma lista de tecidos (matérias-primas) com saldo, custo e detalhes (largura, gramatura, encolhimento).
-*   **Gerenciamento de Observações:** Permite adicionar, visualizar e resolver observações associadas a produtos.
-*   **Painel do Cliente:** Busca dados cadastrais (PF/PJ) e estatísticas financeiras de clientes.
-*   **Contas a Receber:** Permite buscar documentos de contas a receber com filtros avançados e gerar boletos em PDF.
-*   **Gerenciamento de Usuários:** CRUD de usuários e suas permissões (acesso restrito a administradores).
+*   **Gerenciamento de Observações:** Permite adicionar, visualizar e resolver observações associadas a produtos (armazenadas no PostgreSQL).
+*   **Painel do Cliente:** Busca dados cadastrais (PF/PJ) e estatísticas financeiras de clientes diretamente do ERP.
+*   **Contas a Receber:** Permite buscar documentos de contas a receber com filtros avançados e gerar boletos em PDF via ERP.
+*   **Módulo Fiscal:** Permite buscar notas fiscais (NF-e) com filtros e gerar DANFE em PDF via ERP.
+*   **Gerenciamento de Usuários:** CRUD de usuários e suas permissões (armazenados no PostgreSQL, acesso restrito a administradores).
 *   **Autenticação e Autorização:** Sistema de login baseado em token JWT com controle de acesso por permissões.
 
 ## Estrutura do Projeto
@@ -19,35 +19,24 @@ O projeto segue uma arquitetura em camadas para melhor organização e manutenib
 
 ```
 saldo-api/
-├── .env # Variáveis de ambiente
-├── requirements.txt
+├── .env # Variáveis de ambiente (Credenciais DB, API, Chaves)
+├── requirements.txt # Dependências Python
 ├── run.py # Ponto de entrada para execução
 ├── README.md # Este arquivo
 │
 └── src/
 ├── app.py # Fábrica da aplicação Flask (create_app)
-├── config/ # Configurações (settings.py)
-├── domain/ # Modelos de dados (dataclasses)
-│ ├── accounts_receivable.py #
-│ └── ... (outros modelos)
-├── database/ # Camada de acesso ao banco de dados (SQLite)
+├── config/ # Configurações (lê .env, define objeto Config)
+├── domain/ # Modelos de dados (dataclasses para ERP e DB local)
+├── database/ # Camada de acesso ao banco de dados (PostgreSQL com SQLAlchemy)
 ├── services/ # Camada de lógica de negócio
-│ ├── accounts_receivable_service.py #
-│ └── ... (outros serviços)
-├── erp_integration/ # Camada de integração com o ERP TOTVS
-│ ├── erp_accounts_receivable_service.py #
-│ └── ... (outros serviços ERP)
-├── api/ # Camada da API (Blueprints, rotas, decorators, errors)
-│ ├── routes/
-│ │ ├── accounts_receivable.py #
-│ │ └── ... (outras rotas)
-│ └── ... (decorators, errors, etc.)
-└── utils/ # Utilitários (logger, builders)
-├── pdf_utils.py #
-└── ... (outros utils)
+├── erp_integration/ # Camada de integração com a API ERP TOTVS
+├── api/ # Camada da API REST (Blueprints, rotas, decorators, errors)
+└── utils/ # Utilitários (logger, builders, etc.)
 ```
 
-Consulte os `README.md` dentro de cada diretório para mais detalhes sobre sua responsabilidade.
+
+Consulte os `README.md` dentro de cada diretório (`src/config`, `src/database`, etc.) para mais detalhes sobre sua responsabilidade.
 
 ## Setup e Instalação
 
@@ -57,61 +46,78 @@ Consulte os `README.md` dentro de cada diretório para mais detalhes sobre sua r
     cd saldo-api
     ```
 
-2.  **Crie um Ambiente Virtual:**
+2.  **Pré-requisitos:**
+    *   **Python:** 3.10 ou superior.
+    *   **PostgreSQL:** Um servidor PostgreSQL instalado e acessível (localmente, Docker, ou na nuvem).
+    *   **Cliente PostgreSQL (libpq):** Certifique-se de que as bibliotecas cliente do PostgreSQL (especificamente `libpq`) estejam instaladas e acessíveis no ambiente onde a API será executada (necessário para o driver `psycopg`). No Windows, isso geralmente envolve instalar o cliente PostgreSQL e adicionar seu diretório `bin` ao PATH do sistema.
+
+3.  **Crie e Ative um Ambiente Virtual:**
     ```bash
     python -m venv venv
-    source venv/bin/activate  # Linux/macOS
-    # ou
-    venv\Scripts\activate    # Windows
+    # Linux/macOS:
+    source venv/bin/activate
+    # Windows:
+    .\venv\Scripts\activate
     ```
 
-3.  **Instale as Dependências:**
+4.  **Instale as Dependências:**
     ```bash
     pip install -r requirements.txt
     ```
 
-4.  **Configure as Variáveis de Ambiente:**
-    *   Copie o arquivo `.env.example` (se existir) para `.env`.
-    *   Preencha as variáveis no arquivo `.env` com os valores corretos para seu ambiente:
-        *   `SECRET_KEY`: Chave secreta para assinar tokens JWT (gere uma chave segura).
-        *   `DATABASE_PATH`: Caminho para o arquivo do banco de dados SQLite (ex: `database/app.db`).
-        *   `API_BASE_URL`: URL base da API TOTVS.
-        *   `API_USERNAME`: Usuário para autenticação na API TOTVS.
-        *   `API_PASSWORD`: Senha para autenticação na API TOTVS.
-        *   `CLIENT_ID`: Client ID para autenticação OAuth na API TOTVS.
-        *   `CLIENT_SECRET`: Client Secret para autenticação OAuth na API TOTVS.
-        *   `COMPANY_CODE`: Código da empresa padrão no TOTVS.
-        *   `APP_HOST`: Host onde a API Flask será executada (padrão `0.0.0.0`).
-        *   `APP_PORT`: Porta onde a API Flask será executada (padrão `5004`).
-        *   `APP_DEBUG`: Habilita/desabilita modo debug (padrão `True`).
-        *   `LOG_LEVEL`: Nível de log (padrão `DEBUG`).
+5.  **Configure o Banco de Dados PostgreSQL:**
+    *   Conecte-se ao seu servidor PostgreSQL.
+    *   Crie um banco de dados (ex: `connector_db`).
+    *   Crie um usuário (ex: `saldo_api_user`) com uma senha segura. **Evite usar o usuário `postgres` em produção.**
+    *   Conceda privilégios ao usuário no banco de dados criado:
+        ```sql
+        CREATE DATABASE connector_db;
+        CREATE USER saldo_api_user WITH PASSWORD 'sua_senha_segura';
+        GRANT ALL PRIVILEGES ON DATABASE connector_db TO saldo_api_user;
+        -- Conecte-se ao novo banco (\c connector_db) se necessário e execute:
+        -- GRANT ALL ON SCHEMA public TO saldo_api_user;
+        ```
+    *   **Configure o `pg_hba.conf`** no servidor PostgreSQL para permitir conexões do host onde a API Flask rodará, usando o usuário e banco de dados criados, e um método de autenticação seguro (ex: `scram-sha-256` ou `md5`). Recarregue a configuração do PostgreSQL após a edição (`SELECT pg_reload_conf();` ou `systemctl reload postgresql`).
 
-5.  **Execute a Aplicação:**
+6.  **Configure as Variáveis de Ambiente:**
+    *   Copie `.env.example` (se existir) para `.env` ou crie um novo arquivo `.env`.
+    *   Preencha as variáveis no arquivo `.env`:
+        *   `SECRET_KEY`: **OBRIGATÓRIO.** Chave secreta segura e única para JWT.
+        *   `DB_TYPE=POSTGRES`
+        *   `POSTGRES_HOST`: Endereço do servidor PostgreSQL.
+        *   `POSTGRES_PORT`: Porta do servidor PostgreSQL (padrão `5432`).
+        *   `POSTGRES_USER`: Usuário do banco de dados criado.
+        *   `POSTGRES_PASSWORD`: Senha do usuário do banco.
+        *   `POSTGRES_DB`: Nome do banco de dados criado.
+        *   `API_BASE_URL`, `API_USERNAME`, `API_PASSWORD`, `CLIENT_ID`, `CLIENT_SECRET`, `COMPANY_CODE`: Credenciais e configurações da API TOTVS.
+        *   `APP_HOST`, `APP_PORT`, `APP_DEBUG`, `LOG_LEVEL`: Configurações da aplicação Flask.
+        *   `DEFAULT_ADMIN_PASSWORD` (Opcional): Define a senha inicial para o usuário `admin` criado automaticamente. Se omitido, deriva da `SECRET_KEY`.
+
+7.  **Execute a Aplicação:**
     ```bash
     python run.py
     ```
+    A API Flask iniciará. Na primeira execução, o `SchemaManager` tentará criar as tabelas necessárias no banco PostgreSQL e o usuário `admin` padrão. Verifique os logs para confirmar a criação bem-sucedida.
     A API estará disponível em `http://<APP_HOST>:<APP_PORT>`.
 
 ## Padrões de Desenvolvimento
 
-*   **Nomenclatura:**
-    *   Variáveis e funções: `snake_case`.
-    *   Classes: `PascalCase`.
-    *   Constantes: `UPPER_SNAKE_CASE`.
+*   **Nomenclatura:** `snake_case` para variáveis/funções, `PascalCase` para classes, `UPPER_SNAKE_CASE` para constantes.
 *   **Estrutura:** Arquitetura em camadas (API, Services, ERP Integration, Database, Domain).
+*   **Banco de Dados:** PostgreSQL.
+*   **ORM/DB Layer:** SQLAlchemy Core para interação com o banco.
 *   **Tipagem:** Uso extensivo de type hints.
 *   **Modelos:** Uso de `dataclasses` para representar estruturas de dados.
-*   **Logs:** Logs detalhados em níveis apropriados (DEBUG, INFO, WARNING, ERROR, CRITICAL).
-*   **Error Handling:** Uso de exceções customizadas e tratamento robusto de erros.
-*   **Documentação:** Docstrings em todas as funções e classes, READMEs em diretórios chave.
-*   **Variáveis de Ambiente:** Configurações sensíveis e de ambiente gerenciadas via `.env`.
+*   **Logs:** Logs detalhados usando o módulo `logging` e `ConcurrentRotatingFileHandler`.
+*   **Error Handling:** Exceções customizadas e tratamento robusto de erros.
+*   **Documentação:** Docstrings, READMEs nos diretórios chave.
+*   **Variáveis de Ambiente:** Configurações gerenciadas via `.env`.
 
 ## Desenvolvimento Futuro
 
-*   Implementar caching para respostas da API ERP que mudam com pouca frequência.
+*   Implementar caching para respostas da API ERP.
 *   Adicionar testes unitários e de integração.
-*   Refinar o sistema de migração do banco de dados (considerar Alembic/Flask-Migrate).
+*   Implementar Alembic para gerenciar migrações de schema do banco de dados.
 *   Melhorar a configuração de CORS para produção.
-*   Implementar mais funcionalidades de consulta ao ERP.
-*   Expandir funcionalidades do Módulo fiscal (ex: Detalhes da nota).
-*   Expandir funcionalidades do Contas a Receber (ex: Link PIX).
+*   Expandir funcionalidades (Detalhes NF, Link PIX, etc.).
+*   Armazenar dados do ERP no PostgreSQL para relatórios/análises futuras.

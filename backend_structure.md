@@ -1,83 +1,82 @@
 saldo-api/
-├── .env                 # Environment variables (SECRET_KEY, API creds, DB path, etc.)
+├── .env                 # Environment variables (SECRET_KEY, API creds, DB connection, etc.) # MODIFIED
 ├── .gitignore
-├── requirements.txt
+├── requirements.txt     # MODIFIED (Added SQLAlchemy, psycopg)
 ├── run.py               # Simple script to run the Flask app
-├── README.md            # Project overview, setup, structure
+├── README.md            # Project overview, setup, structure # MODIFIED
 │
 └── src/
     ├── __init__.py
-    ├── app.py               # Flask app factory (create_app)
+    ├── app.py               # Flask app factory (create_app) # MODIFIED (SQLAlchemy init)
     ├── config/
     │   ├── __init__.py
-    │   ├── settings.py      # Load env vars, define Config object
-    │   └── README.md        # Explanation of config files
+    │   ├── settings.py      # Load env vars, define Config object, build DB URI # MODIFIED
+    │   └── README.md        # Explanation of config files # MODIFIED
     │
-    ├── domain/              # Data models (formerly models)
+    ├── domain/              # Data models (DTOs for ERP and Local DB)
     │   ├── __init__.py
-    │   ├── accounts_receivable.py # <<< ADDED
-    │   ├── balance.py       # Balance, ProductItem, ProductResponse
-    │   ├── cost.py          # Cost, ProductCost, CostResponse
-    │   ├── fabric_details.py# TecidoDetalhes (renamed from product_model.py)
-    │   ├── fiscal.py        # <<< (Este foi adicionado anteriormente)
-    │   ├── observation.py   # Observation data model (if needed, or use dict)
-    │   ├── person.py        # Address, Phone, Email, IndividualDataModel, etc.
-    │   ├── user.py          # User, UserPermissions
+    │   ├── accounts_receivable.py
+    │   ├── balance.py
+    │   ├── cost.py
+    │   ├── fabric_details.py
+    │   ├── fiscal.py
+    │   ├── observation.py
+    │   ├── person.py
+    │   ├── user.py
     │   └── README.md        # Explanation of domain models
     │
-    ├── database/            # Database interaction layer (formerly db)
-    │   ├── __init__.py      # Initialize pool, repositories, schema
-    │   ├── base_repository.py
-    │   ├── connection_pool.py
-    │   ├── observation_repository.py # Specific repo for observations
-    │   ├── product_repository.py # Placeholder
-    │   ├── schema_manager.py # Handles table creation/migration
-    │   ├── user_repository.py
+    ├── database/            # Database interaction layer (PostgreSQL with SQLAlchemy Core)
+    │   ├── __init__.py      # Initialize SQLAlchemy engine, repositories, schema
+    │   ├── base_repository.py # Uses SQLAlchemy Engine and text()
+    │   ├── observation_repository.py # Adapted for SQLAlchemy
+    │   ├── product_repository.py # Adapted for SQLAlchemy (Placeholder)
+    │   ├── schema_manager.py # Handles table creation/migration (PostgreSQL syntax)
+    │   ├── user_repository.py # Adapted for SQLAlchemy
     │   └── README.md        # Explanation of database layer
     │
     ├── services/            # Business logic layer
     │   ├── __init__.py
-    │   ├── accounts_receivable_service.py # <<< ADDED
-    │   ├── auth_service.py    # User authentication/authorization logic
-    │   ├── customer_service.py# Logic related to customer panel (using ERP data)
-    │   ├── fabric_service.py  # Logic for fabric list building/filtering
-    │   ├── fiscal_service.py  # <<< (Este foi adicionado anteriormente)
-    │   ├── observation_service.py # Business logic for observations
-    │   ├── product_service.py # Logic for product matrix building
+    │   ├── accounts_receivable_service.py
+    │   ├── auth_service.py
+    │   ├── customer_service.py
+    │   ├── fabric_service.py
+    │   ├── fiscal_service.py
+    │   ├── observation_service.py
+    │   ├── product_service.py
     │   └── README.md        # Explanation of business services
     │
     ├── erp_integration/     # Layer for interacting with the TOTVS ERP API
     │   ├── __init__.py
-    │   ├── accounts_receivable_service.py # <<< ADDED
-    │   ├── erp_auth_service.py # Handles ERP API authentication (Bearer token)
-    │   ├── erp_balance_service.py # Fetches balance data from ERP
-    │   ├── erp_cost_service.py    # Fetches cost data from ERP
-    │   ├── erp_fiscal_service.py # <<< (Este foi adicionado anteriormente)
-    │   ├── erp_person_service.py  # Fetches person data from ERP
-    │   ├── erp_product_service.py # Fetches product details (like fabric details) from ERP
+    │   ├── accounts_receivable_service.py
+    │   ├── erp_auth_service.py
+    │   ├── erp_balance_service.py
+    │   ├── erp_cost_service.py
+    │   ├── erp_fiscal_service.py
+    │   ├── erp_person_service.py
+    │   ├── erp_product_service.py
     │   └── README.md        # Explanation of ERP integration layer
     │
     ├── api/                 # Flask Blueprints and route definitions
-    │   ├── __init__.py      # Register all blueprints
+    │   ├── __init__.py
     │   ├── routes/
     │   │   ├── __init__.py
-    │   │   ├── accounts_receivable.py # <<< ADDED
-    │   │   ├── auth.py          # /api/auth/* endpoints
-    │   │   ├── customer_panel.py# /api/customer_panel/* endpoints
-    │   │   ├── fabrics.py       # /api/fabrics/* endpoints
-    │   │   ├── fiscal.py        # <<< (Este foi adicionado anteriormente)
-    │   │   ├── observations.py  # /api/observations/*
-    │   │   ├── products.py      # /api/products/* endpoints
-    │   │   └── users.py         # /api/users/* endpoints
-    │   ├── decorators.py    # Authorization decorators
-    │   ├── errors.py        # Custom error handlers and exceptions
+    │   │   ├── accounts_receivable.py
+    │   │   ├── auth.py
+    │   │   ├── customer_panel.py
+    │   │   ├── fabrics.py
+    │   │   ├── fiscal.py
+    │   │   ├── observations.py
+    │   │   ├── products.py
+    │   │   └── users.py
+    │   ├── decorators.py
+    │   ├── errors.py
     │   └── README.md        # Explanation of the API layer
     │
     └── utils/
         ├── __init__.py
-        ├── fabric_list_builder.py # Helper to build fabric list structure
-        ├── logger.py          # Logging setup
-        ├── matrix_builder.py  # Helper to build product matrix structure
-        ├── pdf_utils.py       # <<< ADDED
-        ├── system_monitor.py  # <<< (Este foi adicionado anteriormente)
+        ├── fabric_list_builder.py
+        ├── logger.py
+        ├── matrix_builder.py
+        ├── pdf_utils.py
+        ├── system_monitor.py
         └── README.md        # Explanation of utility functions

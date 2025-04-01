@@ -1,10 +1,6 @@
 # src/utils/fabric_list_builder.py
 # Utility functions for building and filtering the fabric list structure.
 
-# Remove top-level domain imports causing cycle
-# from src.domain.balance import ProductItem as BalanceItem
-# from src.domain.cost import ProductCost
-# from src.domain.fabric_details import FabricDetailsItem
 from typing import List, Dict, Any, Optional, TYPE_CHECKING # Add TYPE_CHECKING
 from src.utils.logger import logger
 

@@ -43,7 +43,6 @@ class UserRepository(BaseRepository):
             'can_access_fiscal': row.get('can_access_fiscal', False),
             'can_access_accounts_receivable': row.get('can_access_accounts_receivable', False)
         }
-        # Remover chaves de permissão do dict principal 'row'
         perm_keys_in_row = ['permission_id', 'is_admin', 'can_access_products', 'can_access_fabrics',
                             'can_access_customer_panel', 'can_access_fiscal', 'can_access_accounts_receivable']
         user_data = {k: v for k, v in row.items() if k not in perm_keys_in_row}

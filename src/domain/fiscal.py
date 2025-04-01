@@ -20,8 +20,6 @@ class FormattedInvoiceListItem:
     shipping_company_name: Optional[str] = None # Mapped from shippingCompany -> shippingCompanyName
     access_key: Optional[str] = None     # Mapped from eletronic -> accessKey
 
-    # Classmethod from_dict is removed - formatting happens in service layer's _format_invoice_list_item
-
     def to_dict(self) -> Dict[str, Any]:
         """Converts the FormattedInvoiceListItem object to a dictionary."""
         return self.__dict__

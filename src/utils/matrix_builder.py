@@ -2,8 +2,7 @@
 # Utility functions for building the product balance matrix structure.
 
 import re
-# Remove the top-level import: from src.domain.balance import ProductItem
-from typing import List, Dict, Any, Tuple, Set, Optional, TYPE_CHECKING # Add TYPE_CHECKING
+from typing import List, Dict, Any, Tuple, Set, Optional, TYPE_CHECKING
 from src.utils.logger import logger
 
 # Use type checking block for type hints if needed at module level (optional but good practice)

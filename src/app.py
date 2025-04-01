@@ -4,26 +4,20 @@
 from flask import Flask, jsonify
 from flask_cors import CORS
 import atexit
-import os # Necessário para WERKZEUG_RUN_MAIN
-# Importar erro SQLAlchemy para captura
+import os
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.config import Config
 from src.api import register_blueprints
-from src.api.errors import register_error_handlers, ConfigurationError, DatabaseError # Importar DatabaseError também
-# Importar novas funções SQLAlchemy e remover antigas
+from src.api.errors import register_error_handlers, ConfigurationError, DatabaseError
 from src.database import (
-    init_sqlalchemy_engine, # NOVA função
-    dispose_sqlalchemy_engine, # NOVA função
-    # init_db, # REMOVER
-    # close_db_pool, # REMOVER
-    # release_db_connection, # REMOVER
-    get_sqlalchemy_engine # NOVA função (usada implicitamente pelas fábricas de repo)
+    init_sqlalchemy_engine,
+    dispose_sqlalchemy_engine,
+    get_sqlalchemy_engine
 )
 from src.utils.logger import logger, configure_logger
 from src.utils.system_monitor import start_resource_monitor, stop_resource_monitor
 
-# Import Services (permanece igual)
 from src.services import (
     AuthService,
     CustomerService,
@@ -33,11 +27,10 @@ from src.services import (
     FiscalService,
     AccountsReceivableService
 )
-# Import Repositories/ERP Services (permanece igual, mas agora usam SQLAlchemy engine internamente)
+
 from src.database import (
     get_user_repository,
     get_observation_repository
-    # Não precisamos mais de get_db_pool diretamente aqui
 )
 from src.erp_integration import (
     erp_auth_service,
@@ -90,9 +83,6 @@ def create_app(config_object: Config) -> Flask:
         # Chamar a nova função de inicialização do SQLAlchemy Engine
         init_sqlalchemy_engine(db_uri)
         logger.info("SQLAlchemy engine initialized successfully.")
-
-        # Remover o teardown antigo, SQLAlchemy gerencia conexões via contexto 'with'
-        # app.teardown_appcontext(release_db_connection) # REMOVER
 
         # Registrar função para fechar pool do engine no desligamento da app
         atexit.register(dispose_sqlalchemy_engine)

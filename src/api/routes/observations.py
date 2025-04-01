@@ -2,10 +2,9 @@
 # Defines API endpoints for managing product observations.
 
 from flask import Blueprint, request, jsonify, current_app
-from src.services.observation_service import ObservationService # Import the specific service
-# Remove the top-level import: from src.database import get_observation_repository
-from src.api.decorators import login_required, products_access_required # Use product access perm
-from src.api.errors import ApiError, NotFoundError, ValidationError, ForbiddenError # Import custom errors
+from src.services.observation_service import ObservationService
+from src.api.decorators import login_required, products_access_required
+from src.api.errors import ApiError, NotFoundError, ValidationError, ForbiddenError
 from src.utils.logger import logger
 
 observations_bp = Blueprint('observations', __name__)

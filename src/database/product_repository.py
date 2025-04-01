@@ -14,7 +14,6 @@ This file is kept as a placeholder demonstrating structure and SQLAlchemy integr
 
 from sqlalchemy.engine import Engine # Importar Engine
 from .base_repository import BaseRepository # Importar BaseRepository atualizado
-from .connection_pool import ConnectionPool # REMOVER esta linha
 from src.utils.logger import logger
 from typing import Optional # Para type hints
 

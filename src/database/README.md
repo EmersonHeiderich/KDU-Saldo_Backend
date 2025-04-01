@@ -1,26 +1,29 @@
+
+**3. `src/database/README.md`**
+
 # src/database
 
-Este diretório contém toda a lógica relacionada à interação com o banco de dados local (SQLite).
+Este diretório contém toda a lógica relacionada à interação com o banco de dados **PostgreSQL**, utilizando **SQLAlchemy Core**.
 
 ## Arquivos
 
-*   **`__init__.py`**: Inicializa o pool de conexões (`ConnectionPool`) e o gerenciador de schema (`SchemaManager`) quando a aplicação inicia. Fornece funções `get_db_pool()`, `close_db()` e fábricas para obter instâncias dos repositórios (`get_user_repository`, `get_observation_repository`).
-*   **`base_repository.py`**: Define a classe `BaseRepository` que fornece funcionalidades comuns para todos os repositórios, como aquisição/liberação de conexões do pool e execução de queries SQL (`_execute`, `_execute_transaction`).
-*   **`connection_pool.py`**: Implementa a classe `ConnectionPool` thread-safe para gerenciar conexões SQLite, reutilizando-as e limitando o número máximo de conexões ativas. Utiliza `threading.local` para associar conexões a threads.
-*   **`observation_repository.py`**: Define `ObservationRepository`, responsável pelas operações CRUD (Create, Read, Update, Delete) relacionadas às observações de produto (`product_observations`) no banco de dados.
-*   **`product_repository.py`**: Placeholder para operações relacionadas a dados de *produtos* armazenados localmente (se houver). Atualmente, a lógica de observações está em `ObservationRepository`.
-*   **`schema_manager.py`**: Define `SchemaManager`, responsável por criar as tabelas (`CREATE TABLE IF NOT EXISTS`), aplicar migrações (como adicionar novas colunas com `ALTER TABLE`), e garantir dados iniciais essenciais (como o usuário administrador padrão).
-*   **`user_repository.py`**: Define `UserRepository`, responsável pelas operações CRUD para as tabelas `users` e `user_permissions`.
+*   **`__init__.py`**: Inicializa o *engine* do SQLAlchemy (`Engine`) e o gerenciador de schema (`SchemaManager`) quando a aplicação inicia, usando a URI do banco definida na configuração. Fornece funções `get_sqlalchemy_engine()`, `dispose_sqlalchemy_engine()` e fábricas para obter instâncias dos repositórios (`get_user_repository`, `get_observation_repository`).
+*   **`base_repository.py`**: Define a classe `BaseRepository` que fornece funcionalidades comuns para todos os repositórios. Utiliza o `Engine` do SQLAlchemy para obter conexões e executar queries SQL brutas (usando `text()`). Gerencia a execução, mas **não** commita transações (isso é feito nos métodos dos repositórios filhos ou serviços).
+*   **`observation_repository.py`**: Define `ObservationRepository`, responsável pelas operações CRUD relacionadas às observações de produto (`product_observations`). Usa transações explícitas (`connection.begin()`) para operações de escrita.
+*   **`product_repository.py`**: Placeholder para operações relacionadas a dados de *produtos* armazenados localmente (se houver). Adaptado para usar SQLAlchemy Engine.
+*   **`schema_manager.py`**: Define `SchemaManager`, responsável por criar as tabelas (`CREATE TABLE IF NOT EXISTS`) e aplicar migrações simples (`ALTER TABLE ADD COLUMN IF NOT EXISTS`) usando sintaxe PostgreSQL e o `Engine` SQLAlchemy. Garante dados iniciais essenciais (usuário administrador). **Para futuras migrações, considere usar Alembic.**
+*   **`user_repository.py`**: Define `UserRepository`, responsável pelas operações CRUD para as tabelas `users` e `user_permissions`. Usa transações explícitas (`connection.begin()`) para operações de escrita.
 *   **`README.md`**: Este arquivo.
 
 ## Funcionamento
 
-1.  **Inicialização:** Na inicialização da aplicação (`src.app.create_app`), a função `init_db()` deste pacote é chamada. Ela cria a instância do `ConnectionPool` e do `SchemaManager`.
-2.  **Schema:** O `SchemaManager` utiliza o pool para obter uma conexão e executa `initialize_schema()`, que cria as tabelas (se não existirem), aplica migrações necessárias (ex: adiciona colunas) e verifica/cria o usuário admin.
-3.  **Repositórios:** As classes de repositório (`UserRepository`, `ObservationRepository`) herdam de `BaseRepository`. Elas recebem a instância do `ConnectionPool` em seu construtor.
-4.  **Operações:** Quando um serviço precisa interagir com o banco, ele obtém a instância do repositório apropriado (via `get_user_repository()`, etc.). O repositório utiliza os métodos `_execute` ou `_execute_transaction` da `BaseRepository`.
-5.  **Conexões:** A `BaseRepository` usa o `ConnectionPool` para obter (`_get_connection`) e liberar (`_release_connection`) conexões SQLite para cada operação (ou transação), garantindo o gerenciamento correto das conexões.
-6.  **Desligamento:** Na finalização da aplicação (hook `teardown_appcontext` do Flask), a função `close_db()` é chamada para fechar todas as conexões no pool.
+1.  **Inicialização:** Na inicialização da aplicação (`src.app.create_app`), a função `init_sqlalchemy_engine()` deste pacote é chamada. Ela lê a `SQLALCHEMY_DATABASE_URI` da configuração e cria a instância global do `Engine` SQLAlchemy, que gerencia um pool de conexões.
+2.  **Schema:** O `SchemaManager`, recebendo o `Engine`, obtém uma conexão e executa `initialize_schema()`, que cria as tabelas e aplica migrações dentro de uma transação.
+3.  **Repositórios:** As classes de repositório (`UserRepository`, `ObservationRepository`) herdam de `BaseRepository` e recebem o `Engine` em seu construtor.
+4.  **Operações:** Quando um serviço precisa interagir com o banco, ele obtém a instância do repositório apropriado.
+    *   Para **leituras** (`SELECT`), o repositório geralmente chama `_execute` da `BaseRepository`, que obtém uma conexão do pool, executa a query e a libera.
+    *   Para **escritas** (`INSERT`, `UPDATE`, `DELETE`), o método do repositório obtém uma conexão do `Engine` (`with self.engine.connect() as connection:`), inicia uma transação explícita (`with connection.begin():`), executa uma ou mais operações usando `connection.execute(text(...))`, e a transação é commitada (ou revertida em caso de erro) automaticamente ao final do bloco `with connection.begin():`.
+5.  **Desligamento:** Na finalização da aplicação (hook `atexit`), a função `dispose_sqlalchemy_engine()` é chamada para fechar todas as conexões no pool do engine.
 
 ## Modelos de Dados
 

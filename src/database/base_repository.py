@@ -6,7 +6,6 @@ from sqlalchemy.engine import Engine, Connection, Result # Importações SQLAlch
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError # Erros SQLAlchemy
 from sqlalchemy import text # Para executar SQL bruto
 from typing import Any, List, Optional, Dict, Tuple, Literal
-from .connection_pool import ConnectionPool # REMOVER ESTA LINHA - Não usamos mais o pool customizado
 from src.utils.logger import logger
 from src.api.errors import DatabaseError # Import custom error
 
@@ -30,8 +29,6 @@ class BaseRepository:
              raise TypeError("engine must be an instance of sqlalchemy.engine.Engine")
         self.engine = engine
         logger.debug(f"{self.__class__.__name__} initialized with SQLAlchemy engine: {engine.url.database}")
-
-    # REMOVER: _get_connection e _release_connection - SQLAlchemy gerencia isso
 
     def _execute(self, query: str, params: Optional[Dict[str, Any]] = None, fetch_mode: FetchMode = "all") -> Any:
         """
@@ -168,5 +165,3 @@ class BaseRepository:
             # O rollback é feito automaticamente
             logger.error(f"[{self.__class__.__name__}] General error during transaction: {e}", exc_info=True)
             raise DatabaseError(f"An unexpected error occurred during database transaction: {e}") from e
-
-    # REMOVER: _get_last_insert_id - Use "RETURNING id" no INSERT e fetch_mode="none" ou "one" no _execute
