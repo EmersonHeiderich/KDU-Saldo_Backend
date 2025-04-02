@@ -11,9 +11,11 @@ from src.config import Config
 from src.api import register_blueprints
 from src.api.errors import register_error_handlers, ConfigurationError, DatabaseError
 from src.database import (
-    init_sqlalchemy_engine,
+    # Renomear init_sqlalchemy_engine para init_sqlalchemy
+    get_db_session,
+    init_sqlalchemy,
     dispose_sqlalchemy_engine,
-    get_sqlalchemy_engine
+    # get_sqlalchemy_engine # Não mais necessário externamente? get_db_session é usado
 )
 from src.utils.logger import logger, configure_logger
 from src.utils.system_monitor import start_resource_monitor, stop_resource_monitor
@@ -28,6 +30,7 @@ from src.services import (
     AccountsReceivableService
 )
 
+# Importar as funções fábrica dos repositórios
 from src.database import (
     get_user_repository,
     get_observation_repository
@@ -80,17 +83,16 @@ def create_app(config_object: Config) -> Flask:
         if not db_uri:
              raise ConfigurationError("SQLALCHEMY_DATABASE_URI is not configured.")
 
-        # Chamar a nova função de inicialização do SQLAlchemy Engine
-        init_sqlalchemy_engine(db_uri)
-        logger.info("SQLAlchemy engine initialized successfully.")
+        # Usar a função init_sqlalchemy atualizada
+        init_sqlalchemy(db_uri)
+        logger.info("SQLAlchemy engine and session factory initialized successfully.")
 
-        # Registrar função para fechar pool do engine no desligamento da app
         atexit.register(dispose_sqlalchemy_engine)
         logger.debug("Registered SQLAlchemy engine disposal for application exit.")
 
     except (DatabaseError, ConfigurationError, SQLAlchemyError) as db_init_err:
-        logger.critical(f"Failed to initialize database engine or schema: {db_init_err}", exc_info=True)
-        # Considerar se a aplicação pode rodar sem banco, ou forçar saída:
+        logger.critical(f"Failed to initialize database: {db_init_err}", exc_info=True)
+        # Considerar sair se o banco for essencial
         # import sys
         # sys.exit(1)
     except Exception as generic_db_err:
@@ -100,13 +102,16 @@ def create_app(config_object: Config) -> Flask:
 
 
     # --- Dependency Injection (Service Instantiation) ---
-    # Esta parte não muda, pois as fábricas get_user_repository/get_observation_repository
-    # foram atualizadas para usar o engine SQLAlchemy internamente.
     logger.info("Instantiating services...")
     try:
-        # Database Repositories (usando fábricas atualizadas)
+        # Database Repositories (usando as fábricas atualizadas que importam localmente)
         user_repo = get_user_repository()
         observation_repo = get_observation_repository()
+
+        # Adicionar repositórios ao config da app para acesso fácil se necessário
+        # (ex: no helper _get_user_repository dentro de users.py)
+        app.config['user_repository'] = user_repo
+        app.config['observation_repository'] = observation_repo
 
         # ERP Integration Services
         erp_balance_svc = ErpBalanceService(erp_auth_service)
@@ -137,7 +142,6 @@ def create_app(config_object: Config) -> Flask:
 
     except Exception as service_init_err:
         logger.critical(f"Failed to instantiate services: {service_init_err}", exc_info=True)
-        # Exit if services are critical?
         # import sys
         # sys.exit(1)
 
@@ -148,7 +152,6 @@ def create_app(config_object: Config) -> Flask:
     register_error_handlers(app)
 
     # --- Resource Monitoring ---
-    # Adicionado cheque para WERKZEUG_RUN_MAIN para evitar iniciar duas vezes em modo debug
     if not app.debug or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
         start_resource_monitor(interval_seconds=300)
         atexit.register(stop_resource_monitor)
@@ -157,17 +160,20 @@ def create_app(config_object: Config) -> Flask:
     @app.route('/health', methods=['GET'])
     def health_check():
         db_status = "ok"
+        # O teste de conexão já é feito no init_sqlalchemy,
+        # mas um teste rápido aqui pode ser útil.
         try:
-             # Teste rápido de conexão com o banco
-             engine = get_sqlalchemy_engine()
-             with engine.connect() as connection:
-                  # connection.execute(text("SELECT 1")) # Opcional
-                  pass # A conexão em si já é um bom teste
+            # Usar get_db_session para um teste rápido
+             with get_db_session() as db:
+                  # Executar uma query simples (opcional)
+                  # from sqlalchemy import text
+                  # db.execute(text("SELECT 1"))
+                  pass # Apenas obter a sessão já testa a factory e o engine
         except Exception as e:
-             logger.error(f"Health check database connection failed: {e}")
+             logger.error(f"Health check database session failed: {e}")
              db_status = "error"
 
         return jsonify({"status": "ok", "database": db_status}), 200 if db_status == "ok" else 503
 
-    logger.info("Flask application configured successfully with SQLAlchemy.")
+    logger.info("Flask application configured successfully with SQLAlchemy ORM.")
     return app

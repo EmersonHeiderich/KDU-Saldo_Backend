@@ -1,81 +1,52 @@
 # src/domain/observation.py
-# Defines the data model for Product Observations stored locally.
+# Define o modelo ORM para Product Observations usando SQLAlchemy.
 
-from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any
+from sqlalchemy import (
+    Column, Integer, String, Boolean, DateTime, Text, func # Import func if using database default timestamps
+)
+from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.dialects.postgresql import TIMESTAMP # Importar tipo específico do PG
+
+# Importar Base
+from src.database.base import Base
 from src.utils.logger import logger
 
-@dataclass
-class Observation:
+class Observation(Base):
     """
-    Represents a product observation stored in the local database. Mutable.
+    Representa uma observação de produto como modelo ORM.
     """
-    id: Optional[int] = None
-    reference_code: str = ""
-    observation_text: str = "" # Renamed from 'observation' for clarity
-    user: str = ""
-    timestamp: Optional[datetime] = field(default_factory=datetime.now)
-    resolved: bool = False
-    resolved_user: Optional[str] = None
-    resolved_timestamp: Optional[datetime] = None
+    __tablename__ = 'product_observations'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # Usar Text para códigos/textos potencialmente longos
+    reference_code: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    observation_text: Mapped[str] = mapped_column("observation", Text, nullable=False) # Mapeia para coluna 'observation' existente
+    # Coluna "user" precisa de aspas se for palavra reservada, mas SQLAlchemy pode lidar com isso.
+    # Se o nome do atributo no Python for diferente, use mapped_column("user", ...)
+    user: Mapped[str] = mapped_column(Text, nullable=False)
+    # Usar TIMESTAMP(timezone=True) para PostgreSQL, com default via Python/SQLAlchemy
+    timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    resolved: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    resolved_user: Mapped[Optional[str]] = mapped_column(Text)
+    resolved_timestamp: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
 
     def to_dict(self) -> Dict[str, Any]:
-        """Converts the Observation object to a dictionary, handling datetimes."""
-        data = self.__dict__.copy()
-        # Convert datetime objects to ISO format strings for JSON serialization
-        if isinstance(self.timestamp, datetime):
-            data['timestamp'] = self.timestamp.isoformat()
-        if isinstance(self.resolved_timestamp, datetime):
-            data['resolved_timestamp'] = self.resolved_timestamp.isoformat()
-        # Add formatted timestamps for display if needed (optional)
-        # data['timestamp_formatted'] = self.timestamp.strftime('%Y-%m-%d %H:%M:%S') if self.timestamp else None
-        # data['resolved_timestamp_formatted'] = self.resolved_timestamp.strftime('%Y-%m-%d %H:%M:%S') if self.resolved_timestamp else None
-        return data
+        """Converte o objeto Observation para um dicionário."""
+        return {
+            'id': self.id,
+            'reference_code': self.reference_code,
+            # Retorna o nome do atributo python 'observation_text'
+            'observation_text': self.observation_text,
+            'user': self.user,
+            'timestamp': self.timestamp.isoformat() if self.timestamp else None,
+            'resolved': self.resolved,
+            'resolved_user': self.resolved_user,
+            'resolved_timestamp': self.resolved_timestamp.isoformat() if self.resolved_timestamp else None,
+        }
 
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> Optional['Observation']:
-        """Creates an Observation object from a dictionary (e.g., from DB)."""
-        if not isinstance(data, dict):
-            logger.warning(f"Invalid data type for Observation.from_dict: {type(data)}")
-            return None
+    # @classmethod from_dict não é necessário para ORM, o SQLAlchemy cuida disso.
 
-        # Convert ISO timestamp strings back to datetime objects
-        timestamp = data.get('timestamp')
-        if isinstance(timestamp, str):
-            try:
-                timestamp = datetime.fromisoformat(timestamp)
-            except (ValueError, TypeError):
-                logger.warning(f"Invalid format for timestamp: {timestamp}. Setting to None.")
-                timestamp = None
-        elif timestamp is not None and not isinstance(timestamp, datetime):
-             logger.warning(f"Unexpected type for timestamp: {type(timestamp)}. Setting to None.")
-             timestamp = None
-
-
-        resolved_timestamp = data.get('resolved_timestamp')
-        if isinstance(resolved_timestamp, str):
-            try:
-                resolved_timestamp = datetime.fromisoformat(resolved_timestamp)
-            except (ValueError, TypeError):
-                logger.warning(f"Invalid format for resolved_timestamp: {resolved_timestamp}. Setting to None.")
-                resolved_timestamp = None
-        elif resolved_timestamp is not None and not isinstance(resolved_timestamp, datetime):
-             logger.warning(f"Unexpected type for resolved_timestamp: {type(resolved_timestamp)}. Setting to None.")
-             resolved_timestamp = None
-
-
-        try:
-            return cls(
-                id=data.get('id'),
-                reference_code=str(data.get('reference_code', '')),
-                observation_text=str(data.get('observation') or data.get('observation_text', '')), # Handle old/new name
-                user=str(data.get('user', '')),
-                timestamp=timestamp,
-                resolved=bool(data.get('resolved', False)),
-                resolved_user=data.get('resolved_user'),
-                resolved_timestamp=resolved_timestamp
-            )
-        except Exception as e:
-            logger.error(f"Error creating Observation from dict: {e}. Data: {data}")
-            return None
+    def __repr__(self):
+        return f"<Observation(id={self.id}, ref='{self.reference_code}', resolved={self.resolved})>"
