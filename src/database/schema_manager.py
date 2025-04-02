@@ -1,12 +1,12 @@
 # src/database/schema_manager.py
-# Manages the creation and migration of the database schema using SQLAlchemy ORM Metadata.
+# Manages the initial creation of database tables and essential data.
 
 import bcrypt
 import os
 from datetime import datetime, timezone
 from sqlalchemy.engine import Engine, Connection
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
-from sqlalchemy import text, inspect # Import inspect para verificar colunas
+from sqlalchemy import text, inspect
 
 # Importar Base para usar metadata
 from .base import Base
@@ -22,13 +22,23 @@ try:
           logger.warning("Default admin password is too short, using 'admin123' instead.")
           DEFAULT_ADMIN_PASSWORD = 'admin123'
 except (ImportError, ConfigurationError) as e:
-     logger.warning(f"Could not load config for default admin password, using fallback '{DEFAULT_ADMIN_PASSWORD}'. Error: {e}")
+     # Logger pode não estar pronto aqui
+     print(f"Warning: Could not load config for default admin password, using fallback '{DEFAULT_ADMIN_PASSWORD}'. Error: {e}")
 
 
 class SchemaManager:
     """
-    Manages the database schema (PostgreSQL), including table creation via ORM metadata,
-    migrations, and initial data setup using SQLAlchemy Engine.
+    Manages the database schema (PostgreSQL), primarily focusing on:
+    1.  Initial table creation: Ensures tables defined in ORM models exist
+        using `Base.metadata.create_all()` upon application startup, especially
+        useful for the very first run or setting up test databases.
+    2.  Initial data setup: Ensures essential data, like the default admin user,
+        is present.
+
+    Schema alterations and migrations beyond the initial creation (e.g., adding
+    columns, creating specific indexes, modifying constraints) are handled
+    by Alembic. This class should NOT contain manual ALTER TABLE or
+    complex CREATE INDEX statements anymore.
     """
 
     def __init__(self, engine: Engine):
@@ -44,31 +54,23 @@ class SchemaManager:
     def initialize_schema(self):
         """
         Initializes the PostgreSQL database schema. Creates tables defined in ORM models
-        if they don't exist, runs necessary migrations, and ensures essential initial data.
+        if they don't exist using Base.metadata.create_all() and ensures essential initial data.
+        Migrations beyond initial creation are handled by Alembic.
         """
         try:
             logger.info("Starting database schema initialization...")
 
             # --- Create Tables using ORM Metadata ---
             logger.debug("Creating tables based on ORM metadata if they don't exist...")
-            # Base.metadata contém todas as tabelas definidas nos modelos que herdam de Base
             Base.metadata.create_all(bind=self.engine)
-            logger.info("ORM tables checked/created successfully.")
+            logger.info("ORM tables checked/created successfully (if they didn't exist).")
 
-            # --- Run Manual Migrations (Add Columns, Create Indexes) ---
-            # create_all não adiciona colunas a tabelas existentes nem cria todos os índices
-            # Use uma conexão para executar DDL manual necessário
+            # --- Ensure Admin User ---
             with self.engine.connect() as connection:
-                with connection.begin(): # Use transação para migrações
-                     logger.debug("Running manual schema migrations (add columns, indexes)...")
-                     self._run_migrations(connection)
-                     logger.debug("Manual schema migrations checked/applied.")
-
-                # --- Ensure Admin User (fora da transação de migração DDL se preferir) ---
                 with connection.begin():
-                     logger.debug("Ensuring default admin user exists...")
-                     self._ensure_admin_user_exists(connection)
-                     logger.debug("Default admin user check completed.")
+                    logger.debug("Ensuring default admin user exists...")
+                    self._ensure_admin_user_exists(connection)
+                    logger.debug("Default admin user check completed.")
 
             logger.info("Database schema initialization completed successfully.")
 
@@ -79,71 +81,10 @@ class SchemaManager:
             logger.critical(f"Unexpected error during schema initialization: {e}", exc_info=True)
             raise DatabaseError(f"Schema initialization failed: {e}") from e
 
-    # _create_tables não é mais necessário, pois Base.metadata.create_all() faz isso.
-
-    def _run_migrations(self, connection: Connection):
-        """Applies necessary schema alterations (migrations) using manual DDL."""
-        # Usar Inspector para verificar existência de colunas antes de tentar adicionar
-        inspector = inspect(self.engine)
-
-        # Exemplo: Adicionar coluna can_access_accounts_receivable a user_permissions
-        table_name = 'user_permissions'
-        column_name = 'can_access_accounts_receivable'
-        column_definition = 'BOOLEAN DEFAULT FALSE NOT NULL'
-        self._add_column_if_not_exists(connection, inspector, table_name, column_name, column_definition)
-
-        # Exemplo: Adicionar coluna can_access_fiscal a user_permissions
-        column_name = 'can_access_fiscal'
-        self._add_column_if_not_exists(connection, inspector, table_name, column_name, column_definition)
-
-        # Exemplo: Adicionar coluna can_access_customer_panel a user_permissions
-        column_name = 'can_access_customer_panel'
-        self._add_column_if_not_exists(connection, inspector, table_name, column_name, column_definition)
-
-        # Adicionar futuras migrações aqui
-        logger.debug("Schema migrations checked/applied.")
-
-        # --- Criar Índices Manuais ---
-        # create_all cria índices para PKs, FKs (se especificado), e colunas com unique=True/index=True.
-        # Índices mais complexos (como em LOWER(column)) precisam ser criados manualmente.
-        logger.debug("Creating/checking custom indexes (PostgreSQL)...")
-        try:
-            # Índice funcional para busca case-insensitive (se não criado pelo ORM com index=True)
-            # O SQLAlchemy >= 1.4 tenta criar índices normais para colunas com index=True.
-            # Verifique se o índice funcional é realmente necessário ou se o índice normal basta.
-            connection.execute(text("CREATE INDEX IF NOT EXISTS idx_users_username_lower ON users(LOWER(username));"))
-            connection.execute(text("CREATE INDEX IF NOT EXISTS idx_users_email_lower ON users(LOWER(email));"))
-            # Índices em colunas booleanas podem não ser muito úteis dependendo da seletividade, mas mantendo por ora.
-            # O SQLAlchemy já deve ter criado idx_product_observations_resolved se index=True foi usado no modelo.
-            connection.execute(text("CREATE INDEX IF NOT EXISTS idx_product_observations_resolved_timestamp ON product_observations(resolved, timestamp);"))
-
-            logger.debug("Custom indexes checked/created.")
-        except SQLAlchemyError as e:
-            logger.error(f"Error creating custom indexes: {e}", exc_info=True)
-            raise # Propaga erro para rollback da transação
-
-    def _add_column_if_not_exists(self, connection: Connection, inspector, table_name: str, column_name: str, column_definition: str):
-        """Helper function to add a column if it doesn't exist using Inspector."""
-        columns = inspector.get_columns(table_name)
-        column_exists = any(c['name'] == column_name for c in columns)
-
-        if not column_exists:
-            try:
-                alter_query = f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_definition}"
-                logger.info(f"Applying migration: Adding column '{column_name}' to table '{table_name}'.")
-                connection.execute(text(alter_query))
-                logger.info(f"Successfully added column '{column_name}'.")
-            except SQLAlchemyError as e:
-                logger.error(f"Error adding column '{column_name}' to table '{table_name}': {e}", exc_info=True)
-                raise # Reraise para indicar falha na migração
-        else:
-            logger.debug(f"Column '{column_name}' already exists in table '{table_name}'. Skipping.")
-
 
     def _ensure_admin_user_exists(self, connection: Connection):
-        """Checks for the default admin user and creates it if missing using ORM-like logic but with raw SQL for now."""
-        # Esta lógica permanece a mesma, pois precisa garantir o usuário
-        # antes que a aplicação possa usar o ORM completamente. Usa a conexão direta.
+        """Checks for the default admin user and creates it if missing using direct SQL."""
+        # Esta lógica permanece a mesma, pois é para dados essenciais.
         logger.debug("Ensuring default admin user exists (using connection)...")
         try:
             # Verificar se admin existe
@@ -200,12 +141,11 @@ class SchemaManager:
                 connection.execute(perm_upsert_query, {'user_id': admin_id})
                 logger.debug(f"Permissions ensured for admin user ID {admin_id}.")
 
-        except IntegrityError as e: # Captura erros de constraint UNIQUE etc.
+        except IntegrityError as e:
             logger.warning(f"Admin user creation/update failed due to integrity constraint (likely race condition or schema issue): {e}")
-            # Não relançar aqui necessariamente, pois o admin pode ter sido criado por outro processo/thread.
         except SQLAlchemyError as e:
             logger.error(f"SQLAlchemyError ensuring admin user exists: {e}", exc_info=True)
-            raise # Propaga erro para rollback da transação principal do schema init
+            raise
         except Exception as e:
             logger.error(f"Unexpected error ensuring admin user exists: {e}", exc_info=True)
             raise

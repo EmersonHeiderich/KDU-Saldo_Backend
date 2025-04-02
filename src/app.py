@@ -11,14 +11,18 @@ from src.config import Config
 from src.api import register_blueprints
 from src.api.errors import register_error_handlers, ConfigurationError, DatabaseError
 from src.database import (
-    # Renomear init_sqlalchemy_engine para init_sqlalchemy
     get_db_session,
     init_sqlalchemy,
     dispose_sqlalchemy_engine,
-    # get_sqlalchemy_engine # Não mais necessário externamente? get_db_session é usado
+    # Engine não precisa ser importado aqui diretamente
 )
 from src.utils.logger import logger, configure_logger
 from src.utils.system_monitor import start_resource_monitor, stop_resource_monitor
+
+# --- Importar Repositórios Diretamente ---
+from src.database.user_repository import UserRepository
+from src.database.observation_repository import ObservationRepository
+# ---------------------------------------
 
 from src.services import (
     AuthService,
@@ -30,11 +34,12 @@ from src.services import (
     AccountsReceivableService
 )
 
-# Importar as funções fábrica dos repositórios
-from src.database import (
-    get_user_repository,
-    get_observation_repository
-)
+# Remover import das funções fábrica dos repositórios
+# from src.database import (
+#     get_user_repository,
+#     get_observation_repository
+# )
+
 from src.erp_integration import (
     erp_auth_service,
     ErpBalanceService,
@@ -78,13 +83,14 @@ def create_app(config_object: Config) -> Flask:
     logger.info("CORS configured to allow all origins (Update for production).")
 
     # --- Database Initialization (SQLAlchemy) ---
+    db_engine = None # Para passar para os repositórios
     try:
         db_uri = app.config.get('SQLALCHEMY_DATABASE_URI')
         if not db_uri:
              raise ConfigurationError("SQLALCHEMY_DATABASE_URI is not configured.")
 
-        # Usar a função init_sqlalchemy atualizada
-        init_sqlalchemy(db_uri)
+        # init_sqlalchemy agora retorna o engine
+        db_engine = init_sqlalchemy(db_uri)
         logger.info("SQLAlchemy engine and session factory initialized successfully.")
 
         atexit.register(dispose_sqlalchemy_engine)
@@ -92,28 +98,34 @@ def create_app(config_object: Config) -> Flask:
 
     except (DatabaseError, ConfigurationError, SQLAlchemyError) as db_init_err:
         logger.critical(f"Failed to initialize database: {db_init_err}", exc_info=True)
-        # Considerar sair se o banco for essencial
-        # import sys
-        # sys.exit(1)
+        # Parar a app se o banco falhar é uma boa prática
+        import sys
+        sys.exit(1)
     except Exception as generic_db_err:
          logger.critical(f"Unexpected error during database initialization: {generic_db_err}", exc_info=True)
-         # import sys
-         # sys.exit(1)
-
+         import sys
+         sys.exit(1)
 
     # --- Dependency Injection (Service Instantiation) ---
     logger.info("Instantiating services...")
+    if not db_engine:
+         logger.critical("Database engine not available for service instantiation.")
+         import sys
+         sys.exit(1)
+
     try:
-        # Database Repositories (usando as fábricas atualizadas que importam localmente)
-        user_repo = get_user_repository()
-        observation_repo = get_observation_repository()
+        # --- Instanciar Repositórios Diretamente ---
+        # Passar o engine obtido do init_sqlalchemy
+        user_repo = UserRepository(db_engine)
+        observation_repo = ObservationRepository(db_engine)
+        # -----------------------------------------
 
         # Adicionar repositórios ao config da app para acesso fácil se necessário
         # (ex: no helper _get_user_repository dentro de users.py)
         app.config['user_repository'] = user_repo
         app.config['observation_repository'] = observation_repo
 
-        # ERP Integration Services
+        # ERP Integration Services (permanece igual)
         erp_balance_svc = ErpBalanceService(erp_auth_service)
         erp_cost_svc = ErpCostService(erp_auth_service)
         erp_person_svc = ErpPersonService(erp_auth_service)
@@ -121,7 +133,7 @@ def create_app(config_object: Config) -> Flask:
         erp_fiscal_svc = ErpFiscalService(erp_auth_service)
         erp_ar_svc = ErpAccountsReceivableService(erp_auth_service)
 
-        # Application Services
+        # Application Services (recebem instâncias dos repositórios)
         auth_svc = AuthService(user_repo)
         customer_svc = CustomerService(erp_person_svc)
         fabric_svc = FabricService(erp_balance_svc, erp_cost_svc, erp_product_svc)
@@ -142,8 +154,8 @@ def create_app(config_object: Config) -> Flask:
 
     except Exception as service_init_err:
         logger.critical(f"Failed to instantiate services: {service_init_err}", exc_info=True)
-        # import sys
-        # sys.exit(1)
+        import sys
+        sys.exit(1)
 
     # --- Register Blueprints (API Routes) ---
     register_blueprints(app)
@@ -160,15 +172,9 @@ def create_app(config_object: Config) -> Flask:
     @app.route('/health', methods=['GET'])
     def health_check():
         db_status = "ok"
-        # O teste de conexão já é feito no init_sqlalchemy,
-        # mas um teste rápido aqui pode ser útil.
         try:
-            # Usar get_db_session para um teste rápido
              with get_db_session() as db:
-                  # Executar uma query simples (opcional)
-                  # from sqlalchemy import text
-                  # db.execute(text("SELECT 1"))
-                  pass # Apenas obter a sessão já testa a factory e o engine
+                  pass # Apenas obter a sessão testa a factory e o engine
         except Exception as e:
              logger.error(f"Health check database session failed: {e}")
              db_status = "error"
