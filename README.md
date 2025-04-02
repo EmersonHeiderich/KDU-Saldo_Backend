@@ -1,6 +1,6 @@
 # Saldo API
 
-API Flask para consulta de saldos de produtos e tecidos, custos, dados de clientes e contas a receber, integrando-se a um ERP TOTVS e utilizando PostgreSQL como banco de dados.
+API Flask para consulta de saldos de produtos e tecidos, custos, dados de clientes e contas a receber, integrando-se a um ERP TOTVS e utilizando PostgreSQL como banco de dados com SQLAlchemy ORM.
 
 ## Funcionalidades Principais
 
@@ -27,8 +27,8 @@ saldo-api/
 └── src/
 ├── app.py # Fábrica da aplicação Flask (create_app)
 ├── config/ # Configurações (lê .env, define objeto Config)
-├── domain/ # Modelos de dados (dataclasses para ERP e DB local)
-├── database/ # Camada de acesso ao banco de dados (PostgreSQL com SQLAlchemy)
+├── domain/ # Modelos de dados (ORM para DB local, Dataclasses para ERP/DTOs)
+├── database/ # Camada de acesso ao banco de dados (PostgreSQL com SQLAlchemy ORM)
 ├── services/ # Camada de lógica de negócio
 ├── erp_integration/ # Camada de integração com a API ERP TOTVS
 ├── api/ # Camada da API REST (Blueprints, rotas, decorators, errors)
@@ -97,7 +97,7 @@ Consulte os `README.md` dentro de cada diretório (`src/config`, `src/database`,
     ```bash
     python run.py
     ```
-    A API Flask iniciará. Na primeira execução, o `SchemaManager` tentará criar as tabelas necessárias no banco PostgreSQL e o usuário `admin` padrão. Verifique os logs para confirmar a criação bem-sucedida.
+    A API Flask iniciará. Na primeira execução, o `SchemaManager` criará as tabelas baseadas nos modelos ORM (`User`, `Observation`, `UserPermissions`) no banco PostgreSQL e o usuário `admin` padrão. Verifique os logs para confirmar a criação bem-sucedida.
     A API estará disponível em `http://<APP_HOST>:<APP_PORT>`.
 
 ## Padrões de Desenvolvimento
@@ -105,9 +105,9 @@ Consulte os `README.md` dentro de cada diretório (`src/config`, `src/database`,
 *   **Nomenclatura:** `snake_case` para variáveis/funções, `PascalCase` para classes, `UPPER_SNAKE_CASE` para constantes.
 *   **Estrutura:** Arquitetura em camadas (API, Services, ERP Integration, Database, Domain).
 *   **Banco de Dados:** PostgreSQL.
-*   **ORM/DB Layer:** SQLAlchemy Core para interação com o banco.
+*   **ORM/DB Layer:** **SQLAlchemy ORM** para interação com o banco de dados local.
 *   **Tipagem:** Uso extensivo de type hints.
-*   **Modelos:** Uso de `dataclasses` para representar estruturas de dados.
+*   **Modelos:** Uso de **classes ORM (herdando de `Base`)** para representar tabelas do banco local e **`dataclasses`** para representar estruturas de dados do ERP ou DTOs específicos.
 *   **Logs:** Logs detalhados usando o módulo `logging` e `ConcurrentRotatingFileHandler`.
 *   **Error Handling:** Exceções customizadas e tratamento robusto de erros.
 *   **Documentação:** Docstrings, READMEs nos diretórios chave.
@@ -117,7 +117,7 @@ Consulte os `README.md` dentro de cada diretório (`src/config`, `src/database`,
 
 *   Implementar caching para respostas da API ERP.
 *   Adicionar testes unitários e de integração.
-*   Implementar Alembic para gerenciar migrações de schema do banco de dados.
+*   **Implementar Alembic** para gerenciar migrações de schema do banco de dados ORM.
 *   Melhorar a configuração de CORS para produção.
 *   Expandir funcionalidades (Detalhes NF, Link PIX, etc.).
 *   Armazenar dados do ERP no PostgreSQL para relatórios/análises futuras.
