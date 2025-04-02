@@ -1,6 +1,5 @@
 # src/database/__init__.py
-# Initializes SQLAlchemy components: Engine, SessionLocal, Base metadata.
-# Uses local imports for logger/errors to prevent circular dependencies during Alembic runs.
+# Initializes SQLAlchemy components and exports DB access utilities and repositories.
 
 import threading
 from typing import Optional, Generator
@@ -12,6 +11,17 @@ from sqlalchemy.exc import SQLAlchemyError
 
 # Importar Base diretamente - ESSENCIAL para Alembic
 from .base import Base
+# Importar Repositórios principais
+# Usamos importação tardia para repositórios para evitar ciclos de importação
+# Especialmente importante para o Alembic
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .user_repository import UserRepository
+    from .observation_repository import ObservationRepository
+    from .product_repository import ProductRepository
+    from .erp_cache.erp_person_repository import ErpPersonRepository
+
 # NÃO importar logger, errors, ConfigurationError, SchemaManager aqui no topo
 
 # --- SQLAlchemy Engine and Session Factory Globals ---
@@ -22,13 +32,14 @@ _engine_lock = threading.Lock()
 # --- Função de Inicialização do Engine e Session Factory ---
 def init_sqlalchemy(database_uri: str, pool_size: int = 10, max_overflow: int = 20) -> Engine:
     """
-    Initializes the SQLAlchemy engine, session factory, and database schema.
+    Initializes the SQLAlchemy engine, session factory, and essential data.
     Should be called once during application startup.
-    Uses local imports for logger/errors.
+    Uses local imports for logger/errors/SchemaManager.
     """
     # --- Importações locais ---
-    from src.utils.logger import logger # Importa logger aqui
-    from src.api.errors import DatabaseError, ConfigurationError # Importa errors aqui
+    from src.utils.logger import logger
+    from src.api.errors import DatabaseError, ConfigurationError
+    from .schema_manager import SchemaManager # SchemaManager agora só garante dados
     # -------------------------
 
     global _sqla_engine, _SessionLocalFactory
@@ -38,9 +49,6 @@ def init_sqlalchemy(database_uri: str, pool_size: int = 10, max_overflow: int = 
             return _sqla_engine
 
         if not database_uri:
-            # Logger pode não estar disponível ainda se a config falhar aqui,
-            # mas ConfigurationError será levantado.
-            # logger.critical("Database URI is not configured. Cannot initialize SQLAlchemy.")
             raise ConfigurationError("Database URI is missing in configuration.")
 
         logger.info(f"Initializing SQLAlchemy engine and session factory...")
@@ -51,7 +59,7 @@ def init_sqlalchemy(database_uri: str, pool_size: int = 10, max_overflow: int = 
                 pool_size=pool_size,
                 max_overflow=max_overflow,
                 pool_recycle=3600,
-                echo=False
+                echo=False # Mantenha False para produção
             )
 
             # 2. Test Connection
@@ -68,36 +76,31 @@ def init_sqlalchemy(database_uri: str, pool_size: int = 10, max_overflow: int = 
             )
             logger.info("SQLAlchemy session factory (SessionLocal) created.")
 
-            # 4. Initialize Schema (uses the engine)
-            # --- Importar SchemaManager localmente ---
-            from .schema_manager import SchemaManager
-            # ---------------------------------------
+            # 4. Initialize Schema (Data only - User Admin)
             try:
-                logger.info("Initializing database schema...")
+                logger.info("Initializing essential database data (Admin User)...")
                 schema_manager = SchemaManager(engine)
-                schema_manager.initialize_schema()
-                logger.info("Database schema initialization complete.")
+                schema_manager.initialize_schema() # Agora só garante o usuário admin
+                logger.info("Essential database data initialization complete.")
             except Exception as schema_err:
-                logger.critical(f"Database schema initialization failed: {schema_err}", exc_info=True)
-                engine.dispose()
-                raise DatabaseError(f"Schema initialization failed: {schema_err}") from schema_err
+                # Log crítico, mas talvez não precise parar a app se for só o admin
+                logger.error(f"Essential database data initialization failed: {schema_err}", exc_info=True)
+                # Decidir se quer levantar erro aqui ou só logar
+                # raise DatabaseError(f"Essential Data initialization failed: {schema_err}") from schema_err
 
             # Store the initialized engine
             _sqla_engine = engine
             logger.info("SQLAlchemy initialization complete.")
             return _sqla_engine
 
-        except (DatabaseError, ConfigurationError) as e: # Capturar config error tb
-             # Logger pode não estar disponível se falhar cedo
+        except (DatabaseError, ConfigurationError) as e:
              print(f"ERROR: Database/Configuration error during SQLAlchemy initialization: {e}")
              raise
         except SQLAlchemyError as e:
-             # Logger pode não estar disponível
              print(f"ERROR: SQLAlchemy error during initialization: {e}")
              logger.critical(f"SQLAlchemy engine/session factory initialization failed: {e}", exc_info=True)
              raise DatabaseError(f"SQLAlchemy initialization failed: {e}") from e
         except Exception as e:
-             # Logger pode não estar disponível
              print(f"ERROR: Unexpected error during SQLAlchemy initialization: {e}")
              logger.critical(f"Unexpected error during SQLAlchemy initialization: {e}", exc_info=True)
              if 'engine' in locals() and engine: engine.dispose()
@@ -112,13 +115,11 @@ def get_db_session() -> Generator[Session, None, None]:
     Uses local imports for logger/errors.
     """
     # --- Importações locais ---
-    from src.utils.logger import logger # Importa logger aqui
-    from src.api.errors import DatabaseError # Importa errors aqui
+    from src.utils.logger import logger
+    from src.api.errors import DatabaseError
     # -------------------------
 
     if not _SessionLocalFactory:
-        # Logger pode não estar disponível aqui se a inicialização falhou muito cedo
-        # logger.critical("SessionLocal factory not initialized. Call init_sqlalchemy() first.")
         print("CRITICAL ERROR: Database session factory has not been initialized.")
         raise RuntimeError("Database session factory has not been initialized.")
 
@@ -127,30 +128,29 @@ def get_db_session() -> Generator[Session, None, None]:
         db = _SessionLocalFactory()
         yield db
         db.commit()
-        logger.debug("Database session committed successfully.")
+        # logger.debug("Database session committed successfully.") # Log muito verboso
     except SQLAlchemyError as sql_ex:
         logger.error(f"Database error occurred in session: {sql_ex}", exc_info=True)
         if db:
             db.rollback()
             logger.warning("Database session rolled back due to SQLAlchemyError.")
-        raise DatabaseError(f"Database operation failed: {sql_ex}") from sql_ex
+        # Simplificar mensagem de erro para o usuário, detalhes no log
+        raise DatabaseError("Database operation failed.") from sql_ex
     except Exception as e:
         logger.error(f"Error occurred in database session: {e}", exc_info=True)
         if db:
             db.rollback()
             logger.warning("Database session rolled back due to exception.")
-        raise
+        raise # Re-raise a exceção original ou uma DatabaseError mais genérica
     finally:
         if db:
             db.close()
-            logger.debug("Database session closed.")
+            # logger.debug("Database session closed.") # Log muito verboso
 
 # --- Função de Desligamento do Engine ---
 def dispose_sqlalchemy_engine():
     """Closes all connections in the engine's pool. Call during application shutdown."""
-    # --- Importações locais ---
-    from src.utils.logger import logger # Importa logger aqui
-    # -------------------------
+    from src.utils.logger import logger
 
     global _sqla_engine, _SessionLocalFactory
     with _engine_lock:
@@ -166,11 +166,35 @@ def dispose_sqlalchemy_engine():
         else:
             logger.debug("SQLAlchemy engine shutdown called, but engine already disposed or not initialized.")
 
+# --- Implementação de importação tardia para tempo de execução ---
+def get_user_repository():
+    """Importa UserRepository apenas quando necessário."""
+    from .user_repository import UserRepository
+    return UserRepository
+
+def get_observation_repository():
+    """Importa ObservationRepository apenas quando necessário."""
+    from .observation_repository import ObservationRepository
+    return ObservationRepository
+
+def get_product_repository():
+    """Importa ProductRepository apenas quando necessário."""
+    from .product_repository import ProductRepository
+    return ProductRepository
+
+def get_erp_person_repository():
+    """Importa ErpPersonRepository apenas quando necessário."""
+    from .erp_cache.erp_person_repository import ErpPersonRepository
+    return ErpPersonRepository
+
 # --- Itens Exportados Atualizados ---
-# Somente funções e Base são exportados
 __all__ = [
     "init_sqlalchemy",
     "get_db_session",
     "dispose_sqlalchemy_engine",
-    "Base", # Essencial
+    "Base", # Essencial para Alembic e modelos
+    "get_user_repository",
+    "get_observation_repository",
+    "get_product_repository",
+    "get_erp_person_repository",
 ]

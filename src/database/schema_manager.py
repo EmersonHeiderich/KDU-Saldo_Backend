@@ -22,23 +22,16 @@ try:
           logger.warning("Default admin password is too short, using 'admin123' instead.")
           DEFAULT_ADMIN_PASSWORD = 'admin123'
 except (ImportError, ConfigurationError) as e:
-     # Logger pode não estar pronto aqui
      print(f"Warning: Could not load config for default admin password, using fallback '{DEFAULT_ADMIN_PASSWORD}'. Error: {e}")
 
 
 class SchemaManager:
     """
-    Manages the database schema (PostgreSQL), primarily focusing on:
-    1.  Initial table creation: Ensures tables defined in ORM models exist
-        using `Base.metadata.create_all()` upon application startup, especially
-        useful for the very first run or setting up test databases.
-    2.  Initial data setup: Ensures essential data, like the default admin user,
-        is present.
+    Manages the database schema (PostgreSQL), focando em:
+    1.  Configuração inicial: Garante dados essenciais como o usuário admin.
 
-    Schema alterations and migrations beyond the initial creation (e.g., adding
-    columns, creating specific indexes, modifying constraints) are handled
-    by Alembic. This class should NOT contain manual ALTER TABLE or
-    complex CREATE INDEX statements anymore.
+    A criação/alteração de tabelas, colunas, índices, etc., é
+    agora gerenciada exclusivamente pelo Alembic.
     """
 
     def __init__(self, engine: Engine):
@@ -53,37 +46,39 @@ class SchemaManager:
 
     def initialize_schema(self):
         """
-        Initializes the PostgreSQL database schema. Creates tables defined in ORM models
-        if they don't exist using Base.metadata.create_all() and ensures essential initial data.
-        Migrations beyond initial creation are handled by Alembic.
+        Inicializa o schema do banco de dados PostgreSQL.
+        Garante apenas dados iniciais essenciais (usuário admin).
+        A criação/migração de tabelas é feita pelo Alembic.
         """
         try:
-            logger.info("Starting database schema initialization...")
+            logger.info("Starting database schema initialization (data only)...")
 
-            # --- Create Tables using ORM Metadata ---
-            logger.debug("Creating tables based on ORM metadata if they don't exist...")
-            Base.metadata.create_all(bind=self.engine)
-            logger.info("ORM tables checked/created successfully (if they didn't exist).")
+            # --- NÃO CRIAR TABELAS AQUI ---
+            # A linha abaixo foi removida/comentada para que o Alembic seja o único responsável pelo schema.
+            # Base.metadata.create_all(bind=self.engine)
+            # logger.info("Table creation via create_all() skipped. Relying on Alembic.")
+            # ------------------------------
 
-            # --- Ensure Admin User ---
+            # --- Garantir Usuário Admin ---
             with self.engine.connect() as connection:
-                with connection.begin():
+                with connection.begin(): # Inicia uma transação
                     logger.debug("Ensuring default admin user exists...")
                     self._ensure_admin_user_exists(connection)
                     logger.debug("Default admin user check completed.")
+                # O bloco 'with connection.begin()' faz commit ou rollback automaticamente.
 
-            logger.info("Database schema initialization completed successfully.")
+            logger.info("Database essential data initialization completed successfully.")
 
         except SQLAlchemyError as e:
-            logger.critical(f"Database schema initialization failed: {e}", exc_info=True)
-            raise DatabaseError(f"Schema initialization failed: {e}") from e
+            logger.critical(f"Database essential data initialization failed: {e}", exc_info=True)
+            raise DatabaseError(f"Schema/Data initialization failed: {e}") from e
         except Exception as e:
-            logger.critical(f"Unexpected error during schema initialization: {e}", exc_info=True)
-            raise DatabaseError(f"Schema initialization failed: {e}") from e
+            logger.critical(f"Unexpected error during schema/data initialization: {e}", exc_info=True)
+            raise DatabaseError(f"Schema/Data initialization failed: {e}") from e
 
 
     def _ensure_admin_user_exists(self, connection: Connection):
-        """Checks for the default admin user and creates it if missing using direct SQL."""
+        """Verifica o usuário admin padrão e o cria se ausente usando SQL direto."""
         # Esta lógica permanece a mesma, pois é para dados essenciais.
         logger.debug("Ensuring default admin user exists (using connection)...")
         try:
@@ -127,6 +122,7 @@ class SchemaManager:
                 admin_id = admin_user_row[0]
                 logger.debug(f"Default admin user (ID: {admin_id}) already exists. Ensuring permissions...")
                 # Garantir que as permissões existem e estão corretas (UPSERT ou UPDATE/INSERT)
+                # Usar ON CONFLICT (UPSERT) é mais robusto
                 perm_upsert_query = text("""
                     INSERT INTO user_permissions (user_id, is_admin, can_access_products, can_access_fabrics, can_access_customer_panel, can_access_fiscal, can_access_accounts_receivable)
                     VALUES (:user_id, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE)

@@ -3,14 +3,16 @@
 
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
-from sqlalchemy import select, func, delete, update # Import select, func, delete, update
-from sqlalchemy.orm import Session, joinedload, selectinload # Import Session, joinedload, selectinload
+
+from sqlalchemy import select, func, delete, update
+from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from .base_repository import BaseRepository
-from src.domain.user import User, UserPermissions # Import ORM models
 from src.utils.logger import logger
-from src.api.errors import DatabaseError, NotFoundError, ValidationError # Import custom errors
+from src.api.errors import DatabaseError, NotFoundError, ValidationError
+
+# --- NENHUM import de src.domain.user aqui ---
 
 class UserRepository(BaseRepository):
     """
@@ -18,27 +20,27 @@ class UserRepository(BaseRepository):
     Methods now expect a Session object to be passed in.
     """
 
-    # O construtor ainda recebe Engine, mas não o usaremos diretamente nos métodos ORM.
-    # def __init__(self, engine: Engine):
-    #     super().__init__(engine)
-    #     logger.info("UserRepository initialized with SQLAlchemy engine (ready for ORM sessions).")
-
-    # _map_row_to_user removido, ORM cuida disso.
-
-    def find_by_username(self, db: Session, username: str) -> Optional[User]:
+    def find_by_username(self, db: Session, username: str) -> Optional["User"]: # <<<--- Usar string 'User'
         """
         Finds an active user by their username (case-insensitive) using ORM Session.
         """
+        # Importar a classe User *dentro* do método
+        # Isso adia a importação até a execução, quebrando o ciclo durante a análise inicial.
+        try:
+            from src.domain.user import User
+        except ImportError:
+            logger.critical("Falha ao importar src.domain.user dentro de find_by_username. Ciclo pode persistir.")
+            raise
+
         logger.debug(f"ORM: Finding active user by username '{username}'")
         try:
-            # Usar select e options para carregar relacionamento
             stmt = (
-                select(User)
-                .options(joinedload(User.permissions)) # Eager load permissions
+                select(User) # Passar a classe importada localmente
+                .options(joinedload(User.permissions)) # joinedload usa o relationship, não precisa importar UserPermissions aqui
                 .where(func.lower(User.username) == func.lower(username))
                 .where(User.is_active == True)
             )
-            user = db.scalars(stmt).first() # Pega o primeiro resultado ou None
+            user = db.scalars(stmt).first()
 
             if user:
                 logger.debug(f"ORM: User found by username '{username}': ID {user.id}")
@@ -52,16 +54,22 @@ class UserRepository(BaseRepository):
             logger.error(f"ORM: Unexpected error finding user by username '{username}': {e}", exc_info=True)
             raise DatabaseError(f"Unexpected error finding user by username: {e}") from e
 
-    def find_by_id(self, db: Session, user_id: int) -> Optional[User]:
+    def find_by_id(self, db: Session, user_id: int) -> Optional["User"]: # <<<--- Usar string 'User'
         """Finds a user by their ID using ORM Session (regardless of active status)."""
+        # Importar a classe User *dentro* do método
+        try:
+            from src.domain.user import User
+        except ImportError:
+            logger.critical("Falha ao importar src.domain.user dentro de find_by_id. Ciclo pode persistir.")
+            raise
+
         logger.debug(f"ORM: Finding user by ID {user_id}")
         try:
-            # session.get é otimizado para busca por PK
-            # Usar options para carregar o relacionamento junto
-            user = db.get(User, user_id, options=[joinedload(User.permissions)])
+            # db.get precisa da classe concreta
+            user = db.get(User, user_id, options=[joinedload(User.permissions)]) # joinedload usa o relationship
             if user:
                  logger.debug(f"ORM: User found by ID {user_id}.")
-                 # Se permissions for None após joinedload, pode indicar inconsistência
+                 # A verificação de user.permissions é feita no objeto retornado
                  if user.permissions is None:
                       logger.warning(f"ORM: User ID {user_id} found, but permissions relationship is None. Data inconsistency?")
             else:
@@ -74,14 +82,22 @@ class UserRepository(BaseRepository):
             logger.error(f"ORM: Unexpected error finding user by ID {user_id}: {e}", exc_info=True)
             raise DatabaseError(f"Unexpected error finding user by ID: {e}") from e
 
-    def get_all(self, db: Session) -> List[User]:
+    def get_all(self, db: Session) -> List["User"]: # <<<--- Usar string 'User'
         """Retrieves all users from the database using ORM Session."""
+        # Importar a classe User *dentro* do método
+        try:
+            from src.domain.user import User
+        except ImportError:
+            logger.critical("Falha ao importar src.domain.user dentro de get_all. Ciclo pode persistir.")
+            raise
+
         logger.debug("ORM: Retrieving all users")
         try:
+            # select precisa da classe concreta
             stmt = select(User).options(joinedload(User.permissions)).order_by(User.username)
             users = db.scalars(stmt).all()
             logger.debug(f"ORM: Retrieved {len(users)} users from database.")
-            return list(users) # Converter para lista
+            return list(users)
         except SQLAlchemyError as e:
              logger.error(f"ORM: Database error retrieving all users: {e}", exc_info=True)
              raise DatabaseError(f"Database error retrieving all users: {e}") from e
@@ -89,38 +105,38 @@ class UserRepository(BaseRepository):
              logger.error(f"ORM: Unexpected error retrieving all users: {e}", exc_info=True)
              raise DatabaseError(f"Unexpected error retrieving all users: {e}") from e
 
-    def add(self, db: Session, user: User) -> User:
+    # Para 'add' e 'update', o tipo do argumento 'user' já está anotado como string "User".
+    # Não precisamos importar a classe User aqui, pois estamos trabalhando com o objeto recebido.
+    def add(self, db: Session, user: "User") -> "User":
         """Adds a new user and their permissions using ORM Session."""
         if not user.username or not user.password_hash or not user.name:
              raise ValueError("Missing required fields (username, password_hash, name) for User.")
         if user.permissions is None:
-             # O relacionamento cascade deve cuidar disso, mas validar é bom.
-             # Se você criar User sem UserPermissions, o cascade não vai criar permissões automaticamente.
-             # É melhor garantir que o objeto User já tenha o objeto UserPermissions associado antes de chamar add.
+             # Se precisar *criar* UserPermissions aqui, importe localmente
+             try:
+                 from src.domain.user import UserPermissions
+             except ImportError:
+                 logger.critical("Falha ao importar src.domain.user.UserPermissions dentro de add. Ciclo pode persistir.")
+                 raise
              logger.warning(f"User object for '{user.username}' is missing associated UserPermissions object. Creating default.")
-             user.permissions = UserPermissions() # Cria permissões padrão associadas
-             # O backref/cascade cuidará do user_id ao adicionar o User.
+             user.permissions = UserPermissions()
 
         logger.debug(f"ORM: Adding user '{user.username}' to session")
         try:
-            # Define timestamp se não estiver definido
             if user.created_at is None:
                 user.created_at = datetime.now(timezone.utc)
 
-            db.add(user) # Adiciona o usuário (e permissões via cascade) à sessão
-            db.flush() # Opcional: Envia as alterações para o DB para obter IDs gerados, sem commitar.
-                       # Útil se precisar do ID imediatamente após adicionar.
+            db.add(user) # Adiciona o objeto user (que deve ser uma instância de User)
+            db.flush() # Garante que o ID seja gerado se necessário antes do commit
             logger.info(f"ORM: User '{user.username}' added to session (ID: {user.id}, Perm ID: {getattr(user.permissions, 'id', None)}). Commit pending.")
-            # Commit é tratado externamente pelo get_db_session
             return user
         except IntegrityError as e:
-            db.rollback() # Importante reverter em caso de erro
+            db.rollback()
             logger.warning(f"ORM: Database integrity error adding user '{user.username}': {e}")
-            # Analisar o erro para retornar mensagem mais específica (ex: duplicate username/email)
             error_info = str(e.orig).lower() if e.orig else str(e).lower()
-            if "users_username_key" in error_info or "unique constraint" in error_info and "username" in error_info:
+            if "users_username_key" in error_info or "uq_users_username" in error_info:
                  raise ValueError(f"Username '{user.username}' already exists.")
-            if "users_email_key" in error_info or "unique constraint" in error_info and "email" in error_info and user.email:
+            if "users_email_key" in error_info or "uq_users_email" in error_info and user.email:
                  raise ValueError(f"Email '{user.email}' already exists.")
             raise DatabaseError(f"Failed to add user due to integrity constraint: {e}") from e
         except SQLAlchemyError as e:
@@ -132,55 +148,31 @@ class UserRepository(BaseRepository):
             logger.error(f"ORM: Unexpected error adding user '{user.username}': {e}", exc_info=True)
             raise DatabaseError(f"An unexpected error occurred while adding user: {e}") from e
 
-
-    def update(self, db: Session, user_to_update: User) -> User:
+    def update(self, db: Session, user_to_update: "User") -> "User":
         """Updates an existing user and their permissions using ORM Session."""
-        if user_to_update.id is None:
-            raise ValueError("Cannot update user without an ID.")
-        if not user_to_update.password_hash: # Validar hash não vazio
-             raise ValueError("Password hash cannot be empty for update.")
+        if user_to_update.id is None: raise ValueError("Cannot update user without an ID.")
+        if not user_to_update.password_hash: raise ValueError("Password hash cannot be empty for update.")
 
         logger.debug(f"ORM: Updating user ID {user_to_update.id} in session")
         try:
-            # O objeto user_to_update já deve estar associado à sessão se foi
-            # buscado anteriormente com find_by_id. Se for um objeto novo
-            # representando um existente, usar db.merge() ou buscar primeiro.
-            # Assumindo que user_to_update foi buscado ou está sendo merged.
-            # Se user_to_update não veio da sessão atual, buscar primeiro:
-            # existing_user = db.get(User, user_to_update.id)
-            # if not existing_user:
-            #     raise NotFoundError(f"User with ID {user_to_update.id} not found for update.")
-            # # Copiar atributos atualizados (exceto ID e talvez permissões)
-            # existing_user.name = user_to_update.name
-            # existing_user.email = user_to_update.email
-            # # ... etc ...
-            # # Tratar permissões:
-            # if existing_user.permissions and user_to_update.permissions:
-            #     existing_user.permissions.is_admin = user_to_update.permissions.is_admin
-            #     # ... copiar outras permissões ...
-            # elif user_to_update.permissions:
-            #     # Criar permissões se não existiam
-            #     existing_user.permissions = user_to_update.permissions # Associa novo objeto
-            # # A sessão detectará as mudanças em existing_user e seu relacionamento
+            # A abordagem mais segura é anexar o objeto à sessão se ele não estiver
+            # Isso garante que as mudanças sejam rastreadas e aplicadas.
+            if not db.object_session(user_to_update): # Verifica se o objeto já pertence a esta sessão
+                 logger.debug(f"User object {user_to_update.id} not part of current session. Attaching or merging...")
+                 # Tentar adicionar; se falhar (detached instance error), fazer merge.
+                 # Ou simplesmente usar merge diretamente. Merge é geralmente seguro para upserts.
+                 user_in_session = db.merge(user_to_update)
+            else:
+                 user_in_session = user_to_update # Já está na sessão
 
-            # Se user_to_update *já é* o objeto da sessão:
-            # As modificações feitas nele já estão rastreadas pela sessão.
-            # Apenas garantir que as permissões sejam tratadas.
-            if user_to_update.permissions:
-                 # Se o objeto permissions também veio da sessão, ok.
-                 # Se for um novo objeto, ele precisa ser adicionado ou merged
-                 # ou associado ao usuário que está na sessão. O cascade pode ajudar.
-                 pass # Assumindo que o objeto User e Permissions foram manipulados corretamente antes de chamar update.
-
-            db.flush() # Opcional: Enviar alterações para o DB sem commitar.
-            logger.info(f"ORM: User ID {user_to_update.id} marked for update in session. Commit pending.")
-            # Commit é tratado externamente
-            return user_to_update
+            db.flush() # Envia as alterações pendentes para o DB
+            logger.info(f"ORM: User ID {user_in_session.id} marked for update in session. Commit pending.")
+            return user_in_session
         except IntegrityError as e:
             db.rollback()
             logger.warning(f"ORM: Database integrity error updating user ID {user_to_update.id}: {e}")
             error_info = str(e.orig).lower() if e.orig else str(e).lower()
-            if "users_email_key" in error_info or "unique constraint" in error_info and "email" in error_info:
+            if "users_email_key" in error_info or "uq_users_email" in error_info:
                  raise ValueError(f"Email '{user_to_update.email}' is already in use by another user.")
             raise DatabaseError(f"Failed to update user due to integrity constraint: {e}") from e
         except SQLAlchemyError as e:
@@ -194,12 +186,19 @@ class UserRepository(BaseRepository):
 
     def delete(self, db: Session, user_id: int) -> bool:
         """Deletes a user by their ID using ORM Session."""
+        # Importar a classe User *dentro* do método
+        try:
+            from src.domain.user import User
+        except ImportError:
+            logger.critical("Falha ao importar src.domain.user dentro de delete. Ciclo pode persistir.")
+            raise
+
         logger.debug(f"ORM: Deleting user ID {user_id}")
         try:
-            user = db.get(User, user_id) # Busca o usuário
+            user = db.get(User, user_id) # Passa a classe
             if user:
                 db.delete(user) # Marca para exclusão (cascade cuidará das permissões)
-                db.flush() # Opcional
+                db.flush() # Opcional, mas útil para garantir que a exclusão seja processada antes do commit
                 logger.info(f"ORM: User ID {user_id} marked for deletion in session. Commit pending.")
                 return True
             else:
@@ -216,23 +215,32 @@ class UserRepository(BaseRepository):
 
     def update_last_login(self, db: Session, user_id: int) -> bool:
         """Updates the last_login timestamp for a user using ORM Session."""
+        # Importar a classe User *dentro* do método
+        try:
+            from src.domain.user import User
+        except ImportError:
+            logger.critical("Falha ao importar src.domain.user dentro de update_last_login. Ciclo pode persistir.")
+            raise
+
         logger.debug(f"ORM: Updating last_login for user ID {user_id}")
         try:
-            user = db.get(User, user_id)
+            user = db.get(User, user_id) # Passa a classe
             if user:
                 user.last_login = datetime.now(timezone.utc)
-                db.flush() # Opcional
+                # O flush não é estritamente necessário aqui se o commit for feito logo depois,
+                # mas pode ser útil se você precisar ler o valor atualizado na mesma transação.
+                # db.flush()
                 logger.debug(f"ORM: User ID {user_id} last_login marked for update. Commit pending.")
                 return True
             else:
                  logger.warning(f"ORM: Failed to update last_login for user ID {user_id} (user not found).")
                  return False
         except SQLAlchemyError as e:
-            db.rollback() # Reverter se falhar
+            # Não reverte a sessão aqui, pois pode ser parte de uma transação maior (login)
             logger.error(f"ORM: Failed to update last_login for user ID {user_id}: {e}", exc_info=True)
-            # Não levantar DatabaseError aqui pode ser aceitável para não quebrar o login
+            # Retorna False, mas não levanta erro para não quebrar o login por isso
             return False
         except Exception as e:
-             db.rollback()
+             # Não reverte a sessão aqui
              logger.error(f"ORM: Unexpected error updating last_login for user ID {user_id}: {e}", exc_info=True)
              return False
