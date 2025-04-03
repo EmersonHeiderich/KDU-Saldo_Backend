@@ -1,89 +1,75 @@
-# src/services/product_service.py
-# Contains business logic related to fetching and processing product (finished goods) data.
-
-from typing import List, Dict, Any, Optional
-from src.domain.balance import ProductItem # Domain model for product balance item
-from src.erp_integration.erp_balance_service import ErpBalanceService # ERP service for balances
-from src.utils.matrix_builder import build_product_matrix # Utility for matrix structure
+from typing import List, Dict, Any
+from src.domain.balance import ProductItem
+from src.erp_integration.erp_balance_service import ErpBalanceService
+from src.utils.matrix_builder import build_product_matrix
 from src.utils.logger import logger
 from src.api.errors import ServiceError, NotFoundError, ValidationError
 
 class ProductService:
     """
-    Service layer for handling finished product related operations, primarily balance information.
+    Camada de serviço para operações relacionadas a produtos acabados, principalmente informações de saldo.
     """
     def __init__(self, erp_balance_service: ErpBalanceService):
-        """
-        Initializes the ProductService.
-
-        Args:
-            erp_balance_service: Instance of ErpBalanceService.
-        """
         self.erp_balance_service = erp_balance_service
-        logger.info("ProductService initialized.")
+        logger.info("ProductService inicializado.")
 
     def get_product_balance_matrix_with_items(self, reference_code: str, calculation_mode: str = 'base') -> Dict[str, Any]:
         """
-        Retrieves product balance data for a reference code from the ERP,
-        formats it into a matrix structure (color x size), and includes the raw items.
+            Recupera dados de saldo de produto para um código de referência do ERP,
+            formata-os em uma estrutura de matriz (cor x tamanho) e inclui os itens brutos.
 
-        Args:
-            reference_code: The product reference code to query.
-            calculation_mode: The balance calculation mode ('base', 'sales', 'production').
+            Argumentos:
+            reference_code: O código de referência do produto a ser consultado.
+            computation_mode: O modo de cálculo de saldo ('base', 'sales', 'production').
 
-        Returns:
-            A dictionary containing:
+            Retorna:
+            Um dicionário contendo:
             {
-                "reference_code": str,
-                "calculation_mode": str,
-                "matrix": Dict[str, Any], # The matrix structure from build_product_matrix
-                "product_items": List[Dict[str, Any]] # Raw ProductItem data as dicts
+            "reference_code": str,
+            "calculation_mode": str,
+            "matrix": Dict[str, Any], # A estrutura de matriz de build_product_matrix
+            "product_items": List[Dict[str, Any]] # Dados brutos de ProductItem como dicts
             }
 
-        Raises:
-            ValidationError: If input parameters are invalid.
-            NotFoundError: If no products are found for the reference code.
-            ServiceError: If an error occurs during ERP communication or data processing.
+            Gera:
+            ValidationError: Se os parâmetros de entrada forem inválidos.
+            NotFoundError: Se nenhum produto for encontrado para o código de referência.
+            ServiceError: Se ocorrer um erro durante a comunicação do ERP ou o processamento de dados.
         """
         if not reference_code:
-            raise ValidationError("Product reference code cannot be empty.")
+            raise ValidationError("O código de referência do produto não pode estar vazio.")
         if calculation_mode not in ['base', 'sales', 'production']:
-            raise ValidationError(f"Invalid calculation mode: '{calculation_mode}'. Valid modes are 'base', 'sales', 'production'.")
+            raise ValidationError(f"Modo de cálculo inválido: '{calculation_mode}'. Modos válidos: 'base', 'sales', 'production'.")
 
-        logger.info(f"Fetching balance matrix and items for reference '{reference_code}', mode '{calculation_mode}'.")
+        logger.info(f"Buscando matriz de saldo e itens para referência '{reference_code}', modo '{calculation_mode}'.")
 
         try:
-            logger.debug(f"Calling ERP balance service for reference code: {reference_code}")
-            # Fetch balance items only for the specified reference code
+            logger.debug(f"Chamando serviço de saldo do ERP para código de referência: {reference_code}")
             product_items: List[ProductItem] = self.erp_balance_service.get_balances(
                 reference_code_list=[reference_code],
-                is_fabric=False # Explicitly fetching finished products
+                is_fabric=False
             )
 
             if not product_items:
-                logger.warning(f"No product items found in ERP for reference code: {reference_code}")
-                raise NotFoundError(f"No products found for reference code '{reference_code}'.")
+                logger.warning(f"Nenhum item de produto encontrado no ERP para código de referência: {reference_code}")
+                raise NotFoundError(f"Nenhum produto encontrado para o código de referência '{reference_code}'.")
 
-            logger.debug(f"Found {len(product_items)} product items for reference '{reference_code}'. Building matrix...")
-            # Build the matrix structure using the utility function
+            logger.debug(f"Encontrados {len(product_items)} itens de produto para referência '{reference_code}'. Construindo matriz...")
             matrix_data = build_product_matrix(product_items, calculation_mode)
-            logger.info(f"Successfully built balance matrix for reference '{reference_code}'.")
+            logger.info(f"Matriz de saldo construída com sucesso para referência '{reference_code}'.")
 
-            # Convert product items to dictionaries for JSON response
             product_items_dict = [item.to_dict() for item in product_items]
 
-            # Structure the final response payload including raw items
             response_data = {
                 "reference_code": reference_code,
                 "calculation_mode": calculation_mode,
                 "matrix": matrix_data,
-                "product_items": product_items_dict # Include the raw items
+                "product_items": product_items_dict
             }
             return response_data
 
         except (NotFoundError, ValidationError) as e:
-             raise e # Re-raise specific errors
+             raise e
         except Exception as e:
-            logger.error(f"Error getting product balance matrix for '{reference_code}': {e}", exc_info=True)
-            # Wrap generic or ERP errors
-            raise ServiceError(f"Failed to retrieve product balance matrix: {e}") from e
+            logger.error(f"Erro ao obter matriz de saldo do produto para '{reference_code}': {e}", exc_info=True)
+            raise ServiceError(f"Falha ao recuperar matriz de saldo do produto: {e}") from e

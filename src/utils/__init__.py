@@ -1,5 +1,4 @@
 # src/utils/__init__.py
-# Makes 'utils' a package. Exports utility functions/classes.
 
 from .logger import logger
 from .matrix_builder import build_product_matrix

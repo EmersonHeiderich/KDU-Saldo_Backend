@@ -2,33 +2,32 @@
 # Handles database operations related to products (if any beyond observations).
 
 """
-NOTE: Currently, all product-related DB operations seem to be focused on
-'product_observations'. These are handled by `ObservationRepository`.
+NOTA: Atualmente, todas as operações de BD relacionadas ao produto parecem estar focadas em
+'product_observations'. Elas são manipuladas por `ObservationRepository`.
 
-If there were other product-specific tables or data to manage locally
-(e.g., cached product details, local product metadata), this repository
-would handle those operations.
+Se houvesse outras tabelas ou dados específicos do produto para gerenciar localmente
+(por exemplo, detalhes do produto em cache, metadados do produto local), este repositório
+lidaria com essas operações.
 
-This file is kept as a placeholder demonstrating structure and SQLAlchemy integration.
+Este arquivo é mantido como um espaço reservado demonstrando a estrutura e a integração do SQLAlchemy.
 """
 
-from sqlalchemy.engine import Engine # Importar Engine
-from .base_repository import BaseRepository # Importar BaseRepository atualizado
+from sqlalchemy.engine import Engine
+from .base_repository import BaseRepository
 from src.utils.logger import logger
-from typing import Optional # Para type hints
+from typing import Optional
 
 class ProductRepository(BaseRepository):
     """
-    Repository for managing Product data in the local database using SQLAlchemy.
-    Placeholder: Currently, observation logic is in ObservationRepository.
+    Repositório para gerenciar dados de produtos no banco de dados local usando SQLAlchemy.
+    Atualmente, a lógica de observação está no ObservationRepository.
     """
 
-    # Aceita Engine no construtor
     def __init__(self, engine: Engine):
         super().__init__(engine)
-        logger.info("ProductRepository initialized (Placeholder) with SQLAlchemy engine.")
-
-    # Adicionar métodos aqui se necessário para operações específicas de produtos no DB
+        logger.info("ProductRepository inicializado (Placeholder) com o engine do SQLAlchemy.")
+    
+    # Adicione métodos aqui conforme necessário para operações específicas de produtos no banco de dados
     # Exemplo:
     # def cache_product_details(self, product_data: dict):
     #     # Lógica para inserir/atualizar dados no cache usando self._execute

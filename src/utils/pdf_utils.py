@@ -1,42 +1,35 @@
 # src/utils/pdf_utils.py
-# Utility functions for handling PDF data, like decoding Base64.
-
 import base64
-import binascii # For catching specific decode errors
+import binascii
 from .logger import logger
 
 def decode_base64_to_bytes(base64_string: str) -> bytes:
     """
-    Decodes a Base64 encoded string into bytes.
+    Decodifica uma string Base64 em bytes.
 
     Args:
-        base64_string: The Base64 encoded string.
+        base64_string: A string codificada em Base64.
 
     Returns:
-        The decoded bytes.
+        Os bytes decodificados.
 
     Raises:
-        ValueError: If the input string is empty.
-        TypeError: If the input is not a string.
-        binascii.Error: If the Base64 string is invalid/corrupt.
+        ValueError: Se a string de entrada estiver vazia.
+        TypeError: Se a entrada não for uma string.
+        binascii.Error: Se a string Base64 for inválida ou corrompida.
     """
     if not base64_string:
-        raise ValueError("Input Base64 string cannot be empty.")
+        raise ValueError("A string Base64 de entrada não pode ser vazia.")
     if not isinstance(base64_string, str):
-        raise TypeError("Input must be a string.")
+        raise TypeError("A entrada deve ser uma string.")
 
     try:
-        # Standard Base64 decoding
         decoded_bytes = base64.b64decode(base64_string, validate=True)
-        logger.debug(f"Successfully decoded Base64 string (length: {len(base64_string)}) to bytes (length: {len(decoded_bytes)}).")
+        logger.debug(f"Base64 decodificado com sucesso (tamanho: {len(base64_string)}) para bytes (tamanho: {len(decoded_bytes)}).")
         return decoded_bytes
     except binascii.Error as e:
-        logger.error(f"Failed to decode Base64 string: {e}", exc_info=True)
-        # Re-raise the specific error for the caller to handle
-        raise ValueError(f"Invalid Base64 string provided: {e}") from e
+        logger.error(f"Falha ao decodificar a string Base64: {e}", exc_info=True)
+        raise ValueError(f"String Base64 inválida fornecida: {e}") from e
     except Exception as e:
-        # Catch any other unexpected errors during decoding
-        logger.error(f"Unexpected error during Base64 decoding: {e}", exc_info=True)
-        raise RuntimeError("An unexpected error occurred during Base64 decoding.") from e
-
-# Make sure to import it in __init__.py for utils if needed elsewhere easily
+        logger.error(f"Erro inesperado durante a decodificação Base64: {e}", exc_info=True)
+        raise RuntimeError("Ocorreu um erro inesperado durante a decodificação Base64.") from e

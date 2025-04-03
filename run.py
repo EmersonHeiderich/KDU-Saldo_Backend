@@ -14,20 +14,6 @@ if __name__ == '__main__':
     app = create_app(config)
     logger.info(f"Starting server on {config.APP_HOST}:{config.APP_PORT}")
 
-    # Optional: Add resource monitoring thread if needed (as in original app.py)
-    # import threading
-    # import time
-    # from src.utils.system_monitor import log_system_resources # Assuming you create this helper
-    #
-    # def monitor_resources():
-    #     while True:
-    #         time.sleep(300)  # 5 minutes
-    #         logger.info("=== PERIODIC RESOURCE MONITORING ===")
-    #         log_system_resources()
-    #
-    # monitor_thread = threading.Thread(target=monitor_resources, daemon=True)
-    # monitor_thread.start()
-
     try:
         # Use waitress or gunicorn for production instead of app.run
         app.run(host=config.APP_HOST, port=config.APP_PORT, debug=config.APP_DEBUG)
