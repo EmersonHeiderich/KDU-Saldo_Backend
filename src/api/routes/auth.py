@@ -1,20 +1,18 @@
 # src/api/routes/auth.py
-# Defines API endpoints related to user authentication and session management.
 
 from flask import Blueprint, request, jsonify, current_app, session
-from src.services.auth_service import AuthService # Import the specific service
-from src.api.decorators import login_required # Import decorators
-from src.api.errors import AuthenticationError, ApiError # Import custom errors
+from src.services.auth_service import AuthService
+from src.api.decorators import login_required
+from src.api.errors import AuthenticationError, ApiError
 from src.utils.logger import logger
 
 auth_bp = Blueprint('auth', __name__)
 
-# Helper to get auth_service instance from app context
 def _get_auth_service() -> AuthService:
      service = current_app.config.get('auth_service')
      if not service:
-          logger.critical("AuthService not found in application config!")
-          raise ApiError("Authentication service is unavailable.", 503)
+          logger.critical("Serviço de autenticação não encontrado na configuração da aplicação!")
+          raise ApiError("Serviço de autenticação indisponível.", 503)
      return service
 
 @auth_bp.route('/login', methods=['POST'])
@@ -54,7 +52,6 @@ def login():
                   description: JWT token (also set in session cookie)
                 user:
                   type: object
-                  # Define user object structure here based on User.to_dict()
                   example: {"id": 1, "username": "testuser", "name": "Test User", "email": "test@example.com", "is_active": true, "permissions": {"is_admin": false, ...}}
       400:
         description: Bad request (missing fields or invalid JSON)
@@ -63,9 +60,9 @@ def login():
       500:
         description: Internal server error
     """
-    logger.info("Login request received.")
+    logger.info("Requisição de login recebida.")
     if not request.is_json:
-        logger.warning("Login failed: Request is not JSON.")
+        logger.warning("Login falhou: Requisição não é JSON.")
         return jsonify({"error": "Request must be JSON"}), 400
 
     data = request.get_json()
@@ -73,39 +70,38 @@ def login():
     password = data.get('password')
 
     if not username or not password:
-        logger.warning("Login failed: Missing username or password.")
+        logger.warning("Login falhou: Usuário ou senha ausentes.")
         return jsonify({"error": "Username and password are required"}), 400
 
     try:
         auth_service = _get_auth_service()
         token, user_data = auth_service.login(username, password)
-        logger.info(f"User '{username}' logged in successfully.")
-        # Token is set in session by the service, return it in response body too
+        logger.info(f"Usuário '{username}' logado com sucesso.")
         return jsonify({
             "message": "Login successful",
             "token": token,
             "user": user_data
         }), 200
     except AuthenticationError as e:
-        logger.warning(f"Login failed for '{username}': {e}")
+        logger.warning(f"Login falhou para '{username}': {e}")
         return jsonify({"error": str(e)}), 401
-    except ApiError as e: # Catch specific internal errors if needed
-         logger.error(f"API error during login for '{username}': {e.message}", exc_info=True)
+    except ApiError as e:
+         logger.error(f"Erro de API durante login para '{username}': {e.message}", exc_info=True)
          return jsonify({"error": e.message}), e.status_code
     except Exception as e:
-        logger.error(f"Unexpected error during login for '{username}': {e}", exc_info=True)
+        logger.error(f"Erro inesperado durante login para '{username}': {e}", exc_info=True)
         return jsonify({"error": "An internal server error occurred during login."}), 500
 
 
 @auth_bp.route('/logout', methods=['POST'])
-@login_required # Ensure user is logged in to log out
+@login_required
 def logout():
     """
     Endpoint for user logout. Clears the session token.
     ---
     tags: [Authentication]
     security:
-      - bearerAuth: [] # Indicate JWT Bearer token is expected
+      - bearerAuth: []
     responses:
       200:
         description: Logout successful
@@ -122,18 +118,18 @@ def logout():
       500:
         description: Internal server error
     """
-    logger.info(f"Logout request received for user: {getattr(request, 'current_user', 'Unknown')}")
+    logger.info(f"Requisição de logout recebida para usuário: {getattr(request, 'current_user', 'Desconhecido')}")
     try:
         auth_service = _get_auth_service()
         auth_service.logout()
         return jsonify({"message": "Logout successful"}), 200
     except Exception as e:
-        logger.error(f"Error during logout: {e}", exc_info=True)
+        logger.error(f"Erro durante logout: {e}", exc_info=True)
         return jsonify({"error": "An internal server error occurred during logout."}), 500
 
 
 @auth_bp.route('/verify', methods=['GET'])
-@login_required # Uses the decorator to handle token verification
+@login_required
 def verify_token():
     """
     Endpoint to verify the current user's token (passed via header or session).
@@ -156,27 +152,23 @@ def verify_token():
                   example: "Token is valid"
                 user:
                   type: object
-                  # Define user object structure here
                   example: {"id": 1, "username": "testuser", ...}
       401:
         description: Unauthorized (invalid or expired token)
       500:
         description: Internal server error
     """
-    # If @login_required passes, the token is valid and request.current_user is set.
     try:
-        user = request.current_user # Access user set by decorator
-        logger.info(f"Token verified for user: {user.username} (ID: {user.id})")
-        # Return user data (ensure sensitive info like password hash is excluded)
+        user = request.current_user
+        logger.info(f"Token verificado para usuário: {user.username} (ID: {user.id})")
         user_data = user.to_dict(include_hash=False)
         return jsonify({
             "message": "Token is valid",
             "user": user_data
         }), 200
     except AttributeError:
-         # Should not happen if decorator works, but handle defensively
-         logger.error("request.current_user not set after @login_required passed!")
+         logger.error("request.current_user não definido após @login_required passar!")
          return jsonify({"error": "Internal server error during token verification."}), 500
     except Exception as e:
-         logger.error(f"Unexpected error during token verification: {e}", exc_info=True)
+         logger.error(f"Erro inesperado durante verificação de token: {e}", exc_info=True)
          return jsonify({"error": "An internal server error occurred during verification."}), 500
