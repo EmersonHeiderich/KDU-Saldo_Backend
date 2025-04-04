@@ -1,17 +1,12 @@
-# src/domain/accounts_receivable.py
-# Defines data models related to Accounts Receivable operations based on ERP API.
-
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Any
 from src.utils.logger import logger
-
-# --- Models based on AccountsReceivable.json components/schemas ---
 
 @dataclass(frozen=True)
 class DocumentChangeModel:
     start_date: Optional[str] = None
     end_date: Optional[str] = None
-    in_check: Optional[bool] = None # API says boolean, not nullable? Check usage. Defaulting to None safety.
+    in_check: Optional[bool] = None
 
     @classmethod
     def from_dict(cls, data: Optional[Dict[str, Any]]) -> Optional['DocumentChangeModel']:
@@ -49,8 +44,8 @@ class DocumentFilterModel:
     discharge_type_list: Optional[List[int]] = field(default_factory=list)
     charge_type_list: Optional[List[int]] = field(default_factory=list)
     has_open_invoices: Optional[bool] = None
-    receivable_code_list: Optional[List[float]] = field(default_factory=list) # API uses number/double
-    our_number_list: Optional[List[float]] = field(default_factory=list) # API uses number/double
+    receivable_code_list: Optional[List[float]] = field(default_factory=list)
+    our_number_list: Optional[List[float]] = field(default_factory=list)
     commissioned_code: Optional[int] = None
     commissioned_cpf_cnpj: Optional[str] = None
     closing_code_commission: Optional[int] = None
@@ -59,7 +54,6 @@ class DocumentFilterModel:
     closing_commissioned_code: Optional[int] = None
     closing_commissioned_cpf_cnpj: Optional[str] = None
 
-    # No from_dict needed, service layer builds this for the request
     def to_dict(self) -> Dict[str, Any]:
         d = {}
         if self.change: d['change'] = self.change.to_dict()
@@ -100,7 +94,6 @@ class DocumentRequestModel:
     page: int = 1
     page_size: int = 100
 
-    # No from_dict needed, service layer builds this
     def to_dict(self) -> Dict[str, Any]:
         d = {
             "page": self.page,
@@ -133,12 +126,10 @@ class CalculatedValuesModel:
         )
 
     def to_dict(self) -> Dict[str, Any]:
-        return self.__dict__ # Simple mapping
+        return self.__dict__
 
-# Define CheckInstallmentModel, InvoiceDataModel, CommissionDataModel similarly if needed
-# For brevity, we'll focus on the main DocumentModel and the formatted output
 @dataclass(frozen=True)
-class InvoiceDataModel: # Placeholder - add fields as needed
+class InvoiceDataModel:
     invoice_code: Optional[int] = None
 
     @classmethod
@@ -151,11 +142,10 @@ class InvoiceDataModel: # Placeholder - add fields as needed
 
 @dataclass(frozen=True)
 class DocumentModel:
-    # Core Fields
     branch_code: Optional[int] = None
     customer_code: Optional[int] = None
     customer_cpf_cnpj: Optional[str] = None
-    receivable_code: Optional[int] = None # API uses int64
+    receivable_code: Optional[int] = None
     installment_code: Optional[int] = None
     max_change_filter_date: Optional[str] = None
     expired_date: Optional[str] = None
@@ -177,20 +167,19 @@ class DocumentModel:
     net_value: Optional[float] = None
     discount_value: Optional[float] = None
     rebate_value: Optional[float] = None
-    interest_value: Optional[float] = None # Distinct from calculated_values.interest_value
-    assessment_value: Optional[float] = None # Distinct from calculated_values.fine_value
+    interest_value: Optional[float] = None
+    assessment_value: Optional[float] = None
     bar_code: Optional[str] = None
     digitable_line: Optional[str] = None
-    our_number: Optional[int] = None # API uses int64
+    our_number: Optional[int] = None
     dac_our_number: Optional[str] = None
     qr_code_pix: Optional[str] = None
     discharge_user: Optional[int] = None
     registration_user: Optional[int] = None
-    # Expanded Fields (optional based on 'expand' parameter)
     calculated_values: Optional[CalculatedValuesModel] = None
-    check: Optional[Dict[str, Any]] = None # Simplified for now
+    check: Optional[Dict[str, Any]] = None
     invoice: Optional[List[InvoiceDataModel]] = field(default_factory=list)
-    commissions: Optional[List[Dict[str, Any]]] = field(default_factory=list) # Simplified
+    commissions: Optional[List[Dict[str, Any]]] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: Optional[Dict[str, Any]]) -> Optional['DocumentModel']:
@@ -199,8 +188,7 @@ class DocumentModel:
         calculated_values = CalculatedValuesModel.from_dict(data.get('calculatedValues'))
         invoices_raw = data.get('invoice', [])
         invoices = [InvoiceDataModel.from_dict(inv) for inv in invoices_raw if inv] if isinstance(invoices_raw, list) else []
-        invoices = [inv for inv in invoices if inv is not None] # Filter out Nones
-
+        invoices = [inv for inv in invoices if inv is not None]
 
         return cls(
             branch_code=data.get('branchCode'),
@@ -238,16 +226,15 @@ class DocumentModel:
             discharge_user=data.get('dischargeUser'),
             registration_user=data.get('registrationUser'),
             calculated_values=calculated_values,
-            check=data.get('check'), # Keep as dict for now
+            check=data.get('check'),
             invoice=invoices,
-            commissions=data.get('commissions') # Keep as list of dicts
+            commissions=data.get('commissions')
         )
 
     def to_dict(self) -> Dict[str, Any]:
         d = self.__dict__.copy()
         if self.calculated_values: d['calculated_values'] = self.calculated_values.to_dict()
         if self.invoice: d['invoice'] = [inv.to_dict() for inv in self.invoice]
-        # check and commissions kept as dicts/list of dicts
         return d
 
 
@@ -287,23 +274,17 @@ class DocumentResponseModel:
 class BankSlipRequestModel:
     branch_code: int
     customer_code: int
-    receivable_code: int # API int64
+    receivable_code: int
     installment_number: int
-    customer_cpf_cnpj: Optional[str] = None # Keep this field in the model
+    customer_cpf_cnpj: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         d = {
             "branchCode": self.branch_code,
-            "customerCode": self.customer_code, # Always include customerCode
+            "customerCode": self.customer_code,
             "receivableCode": self.receivable_code,
             "installmentNumber": self.installment_number,
         }
-        # Only add customerCpfCnpj if customerCode is somehow missing (shouldn't happen with current validation)
-        # OR if the API strictly requires *only one*, then we never add CpfCnpj here.
-        # Let's enforce sending only customerCode as requested.
-        # if not self.customer_code and self.customer_cpf_cnpj:
-        #     d['customerCpfCnpj'] = self.customer_cpf_cnpj
-        # Since customerCode is required, we simply don't add customerCpfCnpj to the dict being sent to ERP.
         return d
 
 @dataclass(frozen=True)
@@ -324,32 +305,29 @@ class AccountsReceivableTomasResponseModel:
     def to_dict(self) -> Dict[str, Any]:
         return self.__dict__
 
-
-# --- Formatted output model for the /search endpoint ---
 @dataclass(frozen=True)
 class FormattedReceivableListItem:
     customer_code: Optional[int] = None
     customer_cpf_cnpj: Optional[str] = None
-    customer_name: Optional[str] = None # Enriched field
-    invoice_number: Optional[int] = None # From nested invoice -> invoiceCode
-    document_number: Optional[int] = None # receivableCode
-    installment_number: Optional[int] = None # installmentCode
+    customer_name: Optional[str] = None
+    invoice_number: Optional[int] = None
+    document_number: Optional[int] = None
+    installment_number: Optional[int] = None
     bearer_name: Optional[str] = None
     issue_date: Optional[str] = None
     expired_date: Optional[str] = None
-    days_late: Optional[int] = None # From calculated_values
+    days_late: Optional[int] = None
     payment_date: Optional[str] = None
-    value_original: Optional[float] = None # installmentValue
-    value_increase: Optional[float] = None # Combined calculated values
-    value_rebate: Optional[float] = None # Combined rebate/discount values
-    value_paid: Optional[float] = None # paidValue
-    value_corrected: Optional[float] = None # From calculated_values
+    value_original: Optional[float] = None
+    value_increase: Optional[float] = None
+    value_rebate: Optional[float] = None
+    value_paid: Optional[float] = None
+    value_corrected: Optional[float] = None
     status: Optional[int] = None
     document_type: Optional[int] = None
     billing_type: Optional[int] = None
     discharge_type: Optional[int] = None
     charge_type: Optional[int] = None
 
-    # No from_dict needed, built in service layer
     def to_dict(self) -> Dict[str, Any]:
         return self.__dict__
